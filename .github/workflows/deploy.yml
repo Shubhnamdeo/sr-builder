@@ -33,7 +33,7 @@ jobs:
           cache: 'npm'
 
       - name: Install Frontend Dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build Vite Application
         run: npm run build
