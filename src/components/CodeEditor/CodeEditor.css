@@ -1,0 +1,34 @@
+.code-editor-container {
+  flex: 1;
+  overflow: hidden;
+  background: #1b2234;
+  position: relative;
+  transition: box-shadow 0.3s ease;
+}
+
+.code-editor-container .cm-editor {
+  height: 100%;
+  outline: none;
+}
+
+.code-editor-container .cm-scroller {
+  overflow: auto;
+}
+
+/* SyncTeX Jump-to-Code Glow Effect */
+.code-editor-container.synctex-jump-flash {
+  box-shadow: inset 0 0 0 2px #0ea5e9, 0 0 20px rgba(14, 165, 233, 0.45);
+  animation: synctexPulse 1.2s ease-out;
+}
+
+@keyframes synctexPulse {
+  0% {
+    box-shadow: inset 0 0 0 3px #38bdf8, 0 0 30px rgba(56, 189, 248, 0.6);
+  }
+  50% {
+    box-shadow: inset 0 0 0 2px #0ea5e9, 0 0 15px rgba(14, 165, 233, 0.35);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 transparent, 0 0 0 transparent;
+  }
+}

@@ -1,0 +1,123 @@
+:root {
+  --bg-primary: #1b2a4a;
+  --bg-secondary: #2c3e6b;
+  --bg-sidebar: #1a2744;
+  --bg-editor: #1e1e1e;
+  --bg-toolbar: #2c2c2c;
+  --bg-menu: #1b2a4a;
+  --bg-input: #3a4f7a;
+  --bg-hover: #3a4f7a;
+  --bg-active: #4a6fa5;
+  --bg-card: #253659;
+  --text-primary: #ffffff;
+  --text-secondary: #b0bec5;
+  --text-muted: #78909c;
+  --accent-green: #0ea5e9;
+  --accent-green-hover: #0284c7;
+  --accent-sky: #0ea5e9;
+  --accent-sky-hover: #0284c7;
+  --accent-sky-glow: rgba(14, 165, 233, 0.4);
+  --accent-blue: #0284c7;
+  --border-color: #3a4f7a;
+  --border-light: #4a6fa5;
+  --danger: #f44336;
+  --warning: #ff9800;
+  --pdf-bg: #525659;
+  --scrollbar-bg: #1a2744;
+  --scrollbar-thumb: #3a4f7a;
+  --font-mono: 'Fira Code', 'Consolas', 'Monaco', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --sidebar-width: 200px;
+  --topbar-height: 40px;
+  --toolbar-height: 36px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+}
+
+#root { height: 100vh; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-bg); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+a { color: #38bdf8; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button { cursor: pointer; border: none; outline: none; font-family: inherit; }
+input { outline: none; font-family: inherit; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); border: 0;
+}
+
+/* =========================================================
+   SR BUILDER - CURSIVE BRANDING & WHITE FLYING BIRD ICON
+   ========================================================= */
+
+.sr-bird-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0284c7, #0ea5e9);
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4);
+  flex-shrink: 0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sr-bird-badge:hover {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: 0 6px 18px rgba(14, 165, 233, 0.55);
+}
+
+.sr-bird-badge.small {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.white-flying-bird {
+  display: block;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+}
+
+.brand-title-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.1;
+  text-align: left;
+}
+
+.brand-cursive-title {
+  font-family: 'Caveat', 'Dancing Script', cursive;
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  text-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+  display: inline-block;
+}
+
+.brand-subtitle-tag {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #38bdf8;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
