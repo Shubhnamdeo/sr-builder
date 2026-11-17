@@ -27,7 +27,6 @@ function ProjectDashboard() {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectAll, setSelectAll] = useState(false);
-  const [showCookies, setShowCookies] = useState(true);
 
   const filteredProjects = useMemo(() => {
     let filtered = projects.filter(p => {
@@ -288,22 +287,6 @@ function ProjectDashboard() {
         </main>
       </div>
 
-      {/* Cookies banner matching Image 1 */}
-      {showCookies && (
-        <div className="overleaf-cookies-banner">
-          <div className="cookies-text">
-            We use cookies to improve your experience on our site, for analytics, and to support marketing, which may involve the sharing of data. You can find out more in our <a href="#privacy">cookie policy</a>.
-          </div>
-          <div className="cookies-actions">
-            <button className="cookies-btn-secondary" onClick={() => setShowCookies(false)}>
-              Essential cookies only
-            </button>
-            <button className="cookies-btn-primary" onClick={() => setShowCookies(false)}>
-              Accept all cookies
-            </button>
-          </div>
-        </div>
-      )}
 
       {showNewProjectModal && (
         <NewProjectModal onClose={() => setShowNewProjectModal(false)} />
