@@ -411,19 +411,6 @@ function PdfPreview({
               </svg>
             )}
           </button>
-
-          {/* Native Vector Print / PDF button */}
-          <button
-            className="preview-tool-btn"
-            title="Print or Save as Native Vector PDF (Ctrl+P)"
-            onClick={() => window.print()}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="6 9 6 2 18 2 18 9"></polyline>
-              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-              <rect x="6" y="14" width="12" height="8"></rect>
-            </svg>
-          </button>
         </div>
 
         {/* Right controls matching Image 2 */}
@@ -487,10 +474,10 @@ function PdfPreview({
 
           <div className="preview-toolbar-divider" />
 
-          {/* Zen / Presentation Mode Toggle */}
+          {/* Full Screen Mode Toggle */}
           <button
             className={`preview-tool-btn zen-toggle-btn ${isZenMode ? 'active-zen' : ''}`}
-            title="Zen / Presentation Mode (Full-Screen Proofreading, Esc to exit)"
+            title="Full Screen Mode (Esc to exit)"
             onClick={() => setIsZenMode(!isZenMode)}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -500,11 +487,11 @@ function PdfPreview({
         </div>
       </div>
 
-      {/* Zen Mode Floating Top Bar */}
+      {/* Full Screen Mode Floating Top Bar */}
       {isZenMode && (
         <div className="zen-floating-top-bar">
           <div className="zen-brand-tag">
-            <span className="zen-title">Zen Presentation Mode</span>
+            <span className="zen-title">Full Screen Mode</span>
           </div>
           <div className="zen-controls-group">
             <div className="zen-page-indicator">
@@ -516,9 +503,9 @@ function PdfPreview({
             <button
               className="zen-exit-btn"
               onClick={() => setIsZenMode(false)}
-              title="Exit Presentation Mode (Esc)"
+              title="Exit Full Screen (Esc)"
             >
-              ✕ Exit Zen (Esc)
+              ✕ Exit Full Screen (Esc)
             </button>
           </div>
         </div>
