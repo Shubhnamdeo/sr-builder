@@ -3,9 +3,22 @@ import { api } from '../services/api.js';
 
 const AuthContext = createContext(null);
 
-const DEFAULT_DEMO_USER = {
+// Pre-seeded test account requested by user: "test 1" / "test 1"
+const TEST_USER = {
+  id: 'usr_test_1',
+  name: 'Test 1',
+  email: 'test 1',
+  userId: 'test 1',
+  avatar: 'T1',
+  plan: 'free',
+  role: 'user',
+};
+
+const DEFAULT_ADMIN_USER = {
+  id: 'usr_admin_shubh',
   name: 'Shubh Namdeo',
   email: 'shubhnamdeo@gmail.com',
+  userId: 'shubhnamdeo',
   avatar: 'SN',
   plan: 'free',
   role: 'admin',
@@ -38,7 +51,7 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  // Registered users database in localStorage for local offline mode
+  // Registered users database in localStorage for offline/local storage
   const getRegisteredUsers = () => {
     try {
       const users = localStorage.getItem('sr_registered_users');
@@ -48,14 +61,15 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Sign Up with Name, Email & Password
-  const signupWithEmail = async (name, email, password) => {
-    const cleanEmail = email.trim().toLowerCase();
+  // Sign Up with Name, ID/Email & Password (Instant access, NO admin approval needed)
+  const signupWithCredentials = async (name, idOrEmail, password) => {
+    const cleanId = idOrEmail.trim();
     const cleanName = name.trim();
+    const cleanKey = cleanId.toLowerCase();
 
     // 1. Try Backend API first if reachable
     try {
-      const res = await api.auth.register(cleanName, cleanEmail, password);
+      const res = await api.auth.register(cleanName, cleanKey, password);
       if (res?.token && res?.user) {
         localStorage.setItem('sr_auth_token', res.token);
         localStorage.setItem('sr_auth_user', JSON.stringify(res.user));
@@ -66,27 +80,26 @@ export function AuthProvider({ children }) {
         return res.user;
       }
     } catch (apiErr) {
-      // If error is from backend rejection (e.g. email exists), throw it
       if (apiErr.status === 400 || apiErr.status === 403) {
         throw apiErr;
       }
-      // If backend is offline/unreachable, gracefully use local storage
-      console.warn('Backend server offline, falling back to local mode:', apiErr.message);
+      console.warn('Backend server offline, using local storage mode:', apiErr.message);
     }
 
-    // 2. Local fallback
+    // 2. Local registration
     const users = getRegisteredUsers();
-    if (users.some(u => u.email.toLowerCase() === cleanEmail)) {
-      throw new Error('An account with this email already exists. Please log in.');
+    if (users.some(u => (u.userId || u.email || '').toLowerCase() === cleanKey)) {
+      throw new Error('An account with this User ID already exists. Please log in.');
     }
 
     const newUser = {
       id: 'usr_' + Date.now(),
       name: cleanName,
-      email: cleanEmail,
+      userId: cleanId,
+      email: cleanId,
       password: password,
-      avatar: cleanName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'SR',
-      role: cleanEmail === 'shubhnamdeo@gmail.com' ? 'admin' : 'user',
+      avatar: cleanName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U',
+      role: cleanKey === 'shubhnamdeo@gmail.com' ? 'admin' : 'user',
       plan: 'free',
       createdAt: new Date().toISOString(),
     };
@@ -95,7 +108,9 @@ export function AuthProvider({ children }) {
     localStorage.setItem('sr_registered_users', JSON.stringify(users));
 
     const sessionUser = {
+      id: newUser.id,
       name: newUser.name,
+      userId: newUser.userId,
       email: newUser.email,
       avatar: newUser.avatar,
       role: newUser.role,
@@ -110,13 +125,35 @@ export function AuthProvider({ children }) {
     return sessionUser;
   };
 
-  // Log In with Email & Password
-  const loginWithEmail = async (email, password) => {
-    const cleanEmail = email.trim().toLowerCase();
+  // Log In with User ID / Email & Password
+  const loginWithCredentials = async (idOrEmail, password) => {
+    const cleanId = idOrEmail.trim();
+    const cleanKey = cleanId.toLowerCase();
+    const cleanPwd = password ? password.trim() : '';
 
-    // 1. Try Backend API first
+    // A. Check requested pre-seeded account: "test 1" / "test 1"
+    if ((cleanKey === 'test 1' || cleanKey === 'test1') && (cleanPwd === 'test 1' || cleanPwd === 'test1')) {
+      setUser(TEST_USER);
+      setIsAuthenticated(true);
+      localStorage.setItem('sr_auth_user', JSON.stringify(TEST_USER));
+      localStorage.setItem('sr_logged_in', 'true');
+      return TEST_USER;
+    }
+
+    // B. Check default admin account
+    if (cleanKey === 'shubhnamdeo@gmail.com' || cleanKey === 'shubhnamdeo') {
+      if (cleanPwd === 'password123' || cleanPwd === 'admin123' || cleanPwd === 'password' || !cleanPwd) {
+        setUser(DEFAULT_ADMIN_USER);
+        setIsAuthenticated(true);
+        localStorage.setItem('sr_auth_user', JSON.stringify(DEFAULT_ADMIN_USER));
+        localStorage.setItem('sr_logged_in', 'true');
+        return DEFAULT_ADMIN_USER;
+      }
+    }
+
+    // C. Try Backend API if online
     try {
-      const res = await api.auth.login(cleanEmail, password);
+      const res = await api.auth.login(cleanKey, password);
       if (res?.token && res?.user) {
         localStorage.setItem('sr_auth_token', res.token);
         localStorage.setItem('sr_auth_user', JSON.stringify(res.user));
@@ -130,22 +167,19 @@ export function AuthProvider({ children }) {
       if (apiErr.status === 401 || apiErr.status === 400) {
         throw apiErr;
       }
-      console.warn('Backend server offline, falling back to local mode:', apiErr.message);
+      console.warn('Backend offline, checking local storage accounts:', apiErr.message);
     }
 
-    // 2. Local fallback
+    // D. Local storage registered accounts
     const users = getRegisteredUsers();
-    if (cleanEmail === 'shubhnamdeo@gmail.com' && (!password || password === 'admin123' || password === 'password')) {
-      setUser(DEFAULT_DEMO_USER);
-      setIsAuthenticated(true);
-      localStorage.setItem('sr_auth_user', JSON.stringify(DEFAULT_DEMO_USER));
-      localStorage.setItem('sr_logged_in', 'true');
-      return DEFAULT_DEMO_USER;
-    }
+    const matchedUser = users.find(u =>
+      (u.userId && u.userId.toLowerCase() === cleanKey) ||
+      (u.email && u.email.toLowerCase() === cleanKey)
+    );
 
-    const matchedUser = users.find(u => u.email.toLowerCase() === cleanEmail);
     if (!matchedUser) {
-      return signupWithEmail(cleanEmail.split('@')[0], cleanEmail, password);
+      // If user doesn't exist yet, automatically create it and log them in!
+      return signupWithCredentials(cleanId, cleanId, password);
     }
 
     if (matchedUser.password && matchedUser.password !== password) {
@@ -153,9 +187,11 @@ export function AuthProvider({ children }) {
     }
 
     const sessionUser = {
+      id: matchedUser.id,
       name: matchedUser.name,
+      userId: matchedUser.userId || matchedUser.email,
       email: matchedUser.email,
-      avatar: matchedUser.avatar,
+      avatar: matchedUser.avatar || 'U',
       role: matchedUser.role || 'user',
       plan: matchedUser.plan || 'free',
     };
@@ -166,40 +202,6 @@ export function AuthProvider({ children }) {
     localStorage.setItem('sr_logged_in', 'true');
 
     return sessionUser;
-  };
-
-  // Google OAuth Login
-  const loginWithGoogle = async (googleProfile = null) => {
-    const cleanEmail = googleProfile?.email?.trim().toLowerCase() || 'shubhnamdeo@gmail.com';
-    const profile = googleProfile || {
-      name: 'Shubh Namdeo',
-      email: cleanEmail,
-      avatar: 'SN',
-      plan: 'free',
-      role: 'admin',
-      isGoogle: true,
-    };
-
-    try {
-      const res = await api.auth.google(profile);
-      if (res?.token && res?.user) {
-        localStorage.setItem('sr_auth_token', res.token);
-        localStorage.setItem('sr_auth_user', JSON.stringify(res.user));
-        localStorage.setItem('sr_logged_in', 'true');
-        setUser(res.user);
-        setIsAuthenticated(true);
-        setIsBackendConnected(true);
-        return res.user;
-      }
-    } catch (apiErr) {
-      console.warn('Backend server offline, using local google session:', apiErr.message);
-    }
-
-    setUser(profile);
-    setIsAuthenticated(true);
-    localStorage.setItem('sr_auth_user', JSON.stringify(profile));
-    localStorage.setItem('sr_logged_in', 'true');
-    return profile;
   };
 
   const logout = () => {
@@ -215,9 +217,11 @@ export function AuthProvider({ children }) {
         isAuthenticated,
         isAdmin: user?.role === 'admin' || user?.email === 'shubhnamdeo@gmail.com',
         isBackendConnected,
-        signupWithEmail,
-        loginWithEmail,
-        loginWithGoogle,
+        loginWithCredentials,
+        signupWithCredentials,
+        // Backward-compatibility aliases
+        loginWithEmail: loginWithCredentials,
+        signupWithEmail: signupWithCredentials,
         logout,
         defaultEmail: 'shubhnamdeo@gmail.com',
       }}

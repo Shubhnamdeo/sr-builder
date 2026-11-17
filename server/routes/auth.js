@@ -113,6 +113,28 @@ router.post('/login', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+
+    // Special test account support requested: "test 1" / "test 1"
+    if ((cleanEmail === 'test 1' || cleanEmail === 'test1') && (password === 'test 1' || password === 'test1')) {
+      let testUser = await User.findOne({ email: 'test 1' });
+      if (!testUser) {
+        testUser = await User.create({
+          name: 'Test 1',
+          email: 'test 1',
+          role: 'user',
+          plan: 'free',
+        });
+        await Project.create({
+          userId: testUser._id,
+          title: "Test 1's Resume",
+          owner: 'You',
+          content: '\\documentclass[letterpaper,10pt]{article}\n\\begin{document}\n\\section{Test 1 Resume}\nWelcome to your resume!\n\\end{document}',
+        });
+      }
+      const token = signToken(testUser._id.toString());
+      return res.json({ token, user: testUser.toSafeObject() });
+    }
+
     const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {

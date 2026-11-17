@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext.jsx';
 import './LoginPage.css';
 
 export default function LoginPage({ defaultMode = 'login' }) {
-  const { loginWithEmail, signupWithEmail, loginWithGoogle } = useAuth();
+  const { loginWithCredentials, signupWithCredentials } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -19,12 +19,10 @@ export default function LoginPage({ defaultMode = 'login' }) {
   }, [defaultMode]);
 
   // Form states
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [agreeTerms, setAgreeTerms] = useState(true);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -53,8 +51,9 @@ export default function LoginPage({ defaultMode = 'login' }) {
     e.preventDefault();
     setError('');
 
-    if (!email.trim()) {
-      setError('Please enter your email address.');
+    const cleanId = userId.trim();
+    if (!cleanId) {
+      setError('Please enter your User ID or Email.');
       return;
     }
     if (!password) {
@@ -63,23 +62,18 @@ export default function LoginPage({ defaultMode = 'login' }) {
     }
 
     if (mode === 'signup') {
-      if (!firstName.trim()) {
-        setError('Please enter your first name.');
+      if (!fullName.trim()) {
+        setError('Please enter your full name.');
         return;
       }
-      if (password.length < 6) {
-        setError('Password must be at least 6 characters long.');
-        return;
-      }
-      if (!agreeTerms) {
-        setError('Please agree to the Terms & Conditions.');
+      if (password.length < 3) {
+        setError('Password must be at least 3 characters long.');
         return;
       }
 
-      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
       setLoading(true);
       try {
-        await signupWithEmail(fullName, email, password);
+        await signupWithCredentials(fullName.trim(), cleanId, password);
         navigate(from, { replace: true });
       } catch (err) {
         setError(err.message || 'Signup failed.');
@@ -89,7 +83,7 @@ export default function LoginPage({ defaultMode = 'login' }) {
     } else {
       setLoading(true);
       try {
-        await loginWithEmail(email, password);
+        await loginWithCredentials(cleanId, password);
         navigate(from, { replace: true });
       } catch (err) {
         setError(err.message || 'Login failed.');
@@ -99,35 +93,10 @@ export default function LoginPage({ defaultMode = 'login' }) {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      let googleProfile = null;
-      if (email.trim() && email.includes('@')) {
-        const clean = email.trim().toLowerCase();
-        googleProfile = {
-          name: clean.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-          email: clean,
-          avatar: clean.slice(0, 2).toUpperCase(),
-          plan: 'free',
-          role: clean === 'shubhnamdeo@gmail.com' ? 'admin' : 'user',
-          isGoogle: true,
-        };
-      }
-      await loginWithGoogle(googleProfile);
-      navigate(from, { replace: true });
-    } catch {
-      setError('Google sign-in failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="auth-fullscreen-container">
       <div className="auth-dual-card">
-        {/* Left Side: Moody Visual Showcase Panel */}
+        {/* Left Side: Visual Showcase Panel */}
         <div className="auth-visual-panel">
           <div className="auth-visual-header">
             <div className="auth-brand-logo">
@@ -176,7 +145,7 @@ export default function LoginPage({ defaultMode = 'login' }) {
           </div>
         </div>
 
-        {/* Right Side: Clean Minimal Form */}
+        {/* Right Side: Clean ID & Password Form */}
         <div className="auth-form-panel">
           <div className="auth-form-inner">
             <h1 className="auth-main-title">
@@ -213,40 +182,37 @@ export default function LoginPage({ defaultMode = 'login' }) {
 
             <form onSubmit={handleSubmit} className="auth-form-fields">
               {mode === 'signup' && (
-                <div className="dual-input-row">
+                <div className="form-input-group">
                   <input
                     type="text"
                     className="auth-text-input"
-                    placeholder="First name"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Full Name (e.g. Shubh Namdeo)"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
                     required
-                  />
-                  <input
-                    type="text"
-                    className="auth-text-input"
-                    placeholder="Last name"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
+                    autoFocus
                   />
                 </div>
               )}
 
-              <input
-                type="email"
-                className="auth-text-input"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
+              <div className="form-input-group">
+                <input
+                  type="text"
+                  className="auth-text-input"
+                  placeholder="User ID or Email (e.g. test 1)"
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
+                  required
+                  autoFocus={mode === 'login'}
+                  autoComplete="username"
+                />
+              </div>
 
               <div className="password-input-wrapper">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   className="auth-text-input password-field"
-                  placeholder="Enter your password"
+                  placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -272,18 +238,7 @@ export default function LoginPage({ defaultMode = 'login' }) {
                 </button>
               </div>
 
-              {mode === 'signup' ? (
-                <label className="terms-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={agreeTerms}
-                    onChange={(e) => setAgreeTerms(e.target.checked)}
-                  />
-                  <span>
-                    I agree to the <a href="#terms" onClick={(e) => e.preventDefault()}>Terms & Conditions</a>
-                  </span>
-                </label>
-              ) : (
+              {mode === 'login' && (
                 <div className="login-row-options">
                   <label className="terms-checkbox-label">
                     <input
@@ -293,9 +248,9 @@ export default function LoginPage({ defaultMode = 'login' }) {
                     />
                     <span>Remember me</span>
                   </label>
-                  <a href="#forgot" className="forgot-pwd-link" onClick={(e) => { e.preventDefault(); alert('Please log in with your email or use Google Sign-In.'); }}>
-                    Forgot password?
-                  </a>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    Default login: <strong>test 1</strong> / <strong>test 1</strong>
+                  </span>
                 </div>
               )}
 
@@ -306,29 +261,13 @@ export default function LoginPage({ defaultMode = 'login' }) {
               >
                 {loading
                   ? 'Please wait...'
-                  : (mode === 'signup' ? 'Create free account' : 'Log in')}
+                  : (mode === 'signup' ? 'Sign Up & Start Building' : 'Log In')}
               </button>
             </form>
 
-            <div className="auth-social-divider">
-              <span>{mode === 'signup' ? 'Or register with' : 'Or continue with'}</span>
+            <div className="auth-help-note" style={{ marginTop: '20px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
+              No admin approval required. Instant access upon sign up.
             </div>
-
-            {/* Single clean Google Sign-in button (Demo removed) */}
-            <button
-              type="button"
-              className="google-single-btn"
-              onClick={handleGoogleLogin}
-              disabled={loading}
-            >
-              <svg width="18" height="18" viewBox="0 0 48 48">
-                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-              </svg>
-              <span>Continue with Google</span>
-            </button>
           </div>
         </div>
       </div>

@@ -150,9 +150,9 @@ function ProjectDashboard() {
           <div className="storage-quota-badge" title={`${usedResumes} of ${maxResumes} resumes stored in cloud`}>
             <span className="storage-quota-pill">{usedResumes} / {maxResumes} Resumes</span>
           </div>
-          <div className="user-profile-badge" title={user?.email || 'shubhnamdeo@gmail.com'}>
-            <span className="user-avatar">{user?.name ? user.name[0].toUpperCase() : 'S'}</span>
-            <span className="user-display-email">{user?.email || 'shubhnamdeo@gmail.com'}</span>
+          <div className="user-profile-badge" title={user?.userId || user?.email || 'User'}>
+            <span className="user-avatar">{user?.name ? user.name[0].toUpperCase() : 'U'}</span>
+            <span className="user-display-email">{user?.name || user?.userId || user?.email || 'User'}</span>
           </div>
           <button
             className="dashboard-logout-btn"
