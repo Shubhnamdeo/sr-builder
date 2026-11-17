@@ -56,6 +56,7 @@ function PdfPreview({
   }, [onTextClick]);
 
   const totalPages = Math.max(1, pages.length);
+  const scale = zoom / 100;
 
   // Sync input box when currentPage changes
   useEffect(() => {
@@ -70,7 +71,7 @@ function PdfPreview({
     const handleScroll = () => {
       const scrollPos = container.scrollTop + 150;
       for (let i = 1; i <= totalPages; i++) {
-        const el = document.getElementById(`pdf-page-${i}`);
+        const el = document.getElementById(`pdf-page-wrapper-${i}`) || document.getElementById(`pdf-page-${i}`);
         if (el) {
           const top = el.offsetTop;
           const height = el.offsetHeight;
@@ -89,7 +90,7 @@ function PdfPreview({
   const scrollToPage = useCallback((pageNum) => {
     const target = Math.max(1, Math.min(totalPages, pageNum));
     setCurrentPage(target);
-    const el = document.getElementById(`pdf-page-${target}`);
+    const el = document.getElementById(`pdf-page-wrapper-${target}`) || document.getElementById(`pdf-page-${target}`);
     if (el && scrollContainerRef.current) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -425,16 +426,24 @@ function PdfPreview({
           </div>
         ) : isEmpty ? (
           <div
-            className="a4-paper-sheet"
+            className="pdf-page-viewport"
             style={{
-              transform: `scale(${zoom / 100})`,
-              transformOrigin: 'top center',
+              width: `${760 * scale}px`,
+              height: `${1075 * scale}px`,
             }}
           >
-            <div className="empty-pdf-placeholder">
-              <div className="empty-pdf-icon">📄</div>
-              <h3>Blank Document</h3>
-              <p>Type your LaTeX code in the editor on the left and click <strong>Recompile</strong> to generate your PDF preview.</p>
+            <div
+              className="a4-paper-sheet"
+              style={{
+                transform: `scale(${scale})`,
+                transformOrigin: 'top center',
+              }}
+            >
+              <div className="empty-pdf-placeholder">
+                <div className="empty-pdf-icon">📄</div>
+                <h3>Blank Document</h3>
+                <p>Type your LaTeX code in the editor on the left and click <strong>Recompile</strong> to generate your PDF preview.</p>
+              </div>
             </div>
           </div>
         ) : (
@@ -447,18 +456,27 @@ function PdfPreview({
             {pages.map((pageHtml, idx) => (
               <div
                 key={idx}
-                id={`pdf-page-${idx + 1}`}
-                className="a4-paper-sheet multi-page-sheet"
+                id={`pdf-page-wrapper-${idx + 1}`}
+                className="pdf-page-viewport"
                 style={{
-                  transform: `scale(${zoom / 100})`,
-                  transformOrigin: 'top center',
+                  width: `${760 * scale}px`,
+                  height: `${1075 * scale}px`,
                 }}
               >
                 <div
-                  className="a4-paper-content"
-                  dangerouslySetInnerHTML={{ __html: pageHtml }}
-                />
-                <div className="pdf-page-number-footer">{idx + 1}</div>
+                  id={`pdf-page-${idx + 1}`}
+                  className="a4-paper-sheet multi-page-sheet"
+                  style={{
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'top center',
+                  }}
+                >
+                  <div
+                    className="a4-paper-content"
+                    dangerouslySetInnerHTML={{ __html: pageHtml }}
+                  />
+                  <div className="pdf-page-number-footer">{idx + 1}</div>
+                </div>
               </div>
             ))}
           </div>

@@ -408,8 +408,18 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 20px; /* Space of 1 or 2 lines between pages */
   width: 100%;
+}
+
+/* Scaled Viewport Wrapper for pixel-exact layout height */
+.pdf-page-viewport {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex-shrink: 0;
+  transition: width 0.12s ease-out, height 0.12s ease-out;
 }
 
 /* ========================================================
@@ -417,7 +427,14 @@
    ======================================================== */
 .a4-paper-sheet {
   width: 760px;
-  min-height: 1075px; /* A4 Ratio */
+  height: 1075px;
+  min-height: 1075px;
+  max-height: 1075px;
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  margin-left: -380px;
   background-color: #ffffff;
   color: #000000;
   padding: 30px 40px 34px 40px; /* Standard 0.5in LaTeX resume margins */
@@ -427,7 +444,6 @@
   line-height: 1.32;
   user-select: text;
   transition: transform 0.15s ease-out;
-  position: relative;
   box-sizing: border-box;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -777,15 +793,21 @@
   }
   .overleaf-preview-container,
   .preview-scroll-canvas,
-  .multi-page-container {
+  .multi-page-container,
+  .pdf-page-viewport {
     padding: 0 !important;
     margin: 0 !important;
     background: #ffffff !important;
     overflow: visible !important;
     display: block !important;
     height: auto !important;
+    width: auto !important;
   }
   .a4-paper-sheet {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    max-height: none !important;
     box-shadow: none !important;
     margin: 0 auto !important;
     transform: none !important;
