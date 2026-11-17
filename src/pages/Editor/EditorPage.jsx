@@ -405,13 +405,13 @@ function compileLatexToPaginatedPdf(code) {
     return `<div class="latex-resume-header">${centered}</div>`;
   });
 
-  // 10. Parse Sections (Uppercase with 100% width thin titlerule underneath)
+  // 10. Parse Sections (Authentic LaTeX Section with hairline titlerule)
   body = body.replace(/\\section\*?\{([^}]*)\}/g, (match, name) => {
     sectionCounter++;
     subsectionCounter = 0;
     const isUnnumbered = match.includes('*') || isResumeStyle;
     const numPrefix = isUnnumbered ? '' : `<span class="section-number">${sectionCounter}</span>`;
-    const headingText = isResumeStyle ? processInlineLatex(name).toUpperCase() : processInlineLatex(name);
+    const headingText = processInlineLatex(name);
     return `<h2 class="latex-section">${numPrefix}${headingText}</h2>`;
   });
 
@@ -561,11 +561,11 @@ function paginateBlocks(rawBlocks, isResumeStyle = false) {
     atomicBlocks.push(b);
   }
 
-  // 3. If there is NO forced page break and total content fits comfortably on 1 page (~980px), keep it single-page!
+  // 3. If there is NO forced page break and total content fits on 1 page (~1010px capacity), keep it strictly single-page!
   const hasForcedBreak = atomicBlocks.includes('__FORCED_PAGE_BREAK__');
   const totalEstimated = atomicBlocks.reduce((acc, b) => b === '__FORCED_PAGE_BREAK__' ? acc + 1000 : acc + estimateCompactBlockHeight(b), 0);
   
-  if (!hasForcedBreak && totalEstimated <= 980) {
+  if (!hasForcedBreak && totalEstimated <= 1010) {
     return [atomicBlocks.join('\n')];
   }
 
@@ -573,7 +573,7 @@ function paginateBlocks(rawBlocks, isResumeStyle = false) {
   const pages = [];
   let currentPageBlocks = [];
   let currentEstimatedHeight = 0;
-  const A4_PAGE_CAPACITY = 990;
+  const A4_PAGE_CAPACITY = 1015;
 
   for (let i = 0; i < atomicBlocks.length; i++) {
     const block = atomicBlocks[i].trim();
@@ -608,21 +608,35 @@ function paginateBlocks(rawBlocks, isResumeStyle = false) {
 }
 
 function estimateCompactBlockHeight(html) {
-  let height = 8;
-  if (html.includes('<h2')) height += 22;
-  if (html.includes('latex-resume-header')) height += 52;
+  if (!html || !html.trim()) return 0;
   
-  const liCount = (html.match(/<li\b/g) || []).length;
-  height += liCount * 16;
-
+  let height = 4;
+  if (html.includes('<h2')) height += 20;
+  if (html.includes('latex-resume-header')) height += 44;
+  
+  // Tabular or line split rows
   const splitCount = (html.match(/latex-line-split/g) || []).length;
-  height += splitCount * 14;
+  height += splitCount * 14.5;
 
-  const plainText = html.replace(/<[^>]*>/g, '');
-  const lines = Math.ceil(plainText.length / 110);
-  height += lines * 13;
+  // List items: calculate height based on actual line wrap of item text
+  const liMatches = html.match(/<li[\s\S]*?<\/li>/g);
+  if (liMatches) {
+    for (const li of liMatches) {
+      const text = li.replace(/<[^>]*>/g, '').trim();
+      // ~115 characters fit per line in standard A4 margins
+      const lines = Math.max(1, Math.ceil(text.length / 115));
+      height += lines * 14.2;
+    }
+  } else {
+    // Other paragraphs or plain text
+    const plainText = html.replace(/<[^>]*>/g, '').trim();
+    if (plainText) {
+      const lines = Math.max(1, Math.ceil(plainText.length / 115));
+      height += lines * 14.2;
+    }
+  }
 
-  return Math.max(20, height);
+  return Math.round(height);
 }
 
 function processInlineLatex(text) {
