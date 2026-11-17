@@ -96,4 +96,13 @@ export const api = {
         body: JSON.stringify({ localProjects }),
       }),
   },
+
+  // AI Assistant Endpoints
+  ai: {
+    chat: (messages, currentCode, userInstruction) =>
+      request('/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify({ messages, currentCode, userInstruction }),
+      }),
+  },
 };

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { api } from '../../services/api.js';
 import './AiResumeModal.css';
 
 // Extract the updated section/code for a clean preview without red and green markings
@@ -32,28 +33,32 @@ const DEFAULT_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 let cachedWorkingModel = null;
 
-// Multi-candidate Gemini caller: tries active Google Generative Language models with auto-fallback
+// Utility: sleep for ms
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Multi-candidate Gemini caller: uses active Google Generative Language models with auto-retry and 5s break
 async function callGeminiApi(apiKey, currentCode, userInstruction) {
   const activeKey = (apiKey || DEFAULT_API_KEY).trim();
-  const prompt = `You are an expert LaTeX resume engineer.
-The user wants to modify their LaTeX resume.
+  const prompt = `You are an expert AI Resume Consultant, Career Advisor, and LaTeX Engineer for "SR Builder".
+The user is working on their LaTeX resume.
 
-Current full LaTeX document:
+CURRENT RESUME LATEX CODE:
 \`\`\`latex
 ${currentCode}
 \`\`\`
 
-User's requested modification: "${userInstruction}"
+USER'S MESSAGE:
+"${userInstruction}"
 
-Strict Instructions:
-1. Apply the user's requested modifications accurately to the relevant section(s).
-   - If the user asks to change font size (e.g. 9pt, 10pt, 11pt, 12pt) or document size, adjust the \\documentclass[letterpaper,Xpt]{article} or font size tags (\\small, \\normalsize, \\large) accordingly.
-   - If the user asks to adjust margins, spacing, or make the resume more compact/spacious, adjust \\addtolength margins, itemsep, or \\vspace spacing accordingly.
-   - If the user asks to change candidate details (name, email, phone, location), projects, skills, experience, or education, update that specific content accurately.
-   - Never corrupt or rename LaTeX preamble package names!
-2. Maintain clean, single-page compilable LaTeX formatting with all preamble packages intact.
-3. Write a brief 1-sentence explanation of what you updated without markdown formatting or emojis.
-4. Output the COMPLETE updated LaTeX document inside a \`\`\`latex ... \`\`\` code block.`;
+Strict Guidelines:
+1. If the user asks a question, gives conversational feedback, or is troubleshooting (e.g. "no changes after accepting"):
+   - Do NOT output any LaTeX code block.
+   - Reply conversationally with clear, helpful instructions.
+   - If they ask about "no changes after accepting", explain that clicking "Accept & Apply Code" updates main.tex, and they need to click the green "Recompile" button at the top right of the editor to refresh the PDF preview.
+2. If the user specifically asks to modify, format, change, or rewrite their resume:
+   - Provide a brief 1-sentence friendly explanation.
+   - Output the COMPLETE updated compilable LaTeX code inside a \`\`\`latex ... \`\`\` block.
+   - Never corrupt packages or inject fake user data.`;
 
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -62,60 +67,71 @@ Strict Instructions:
 
   const candidateModels = [
     ...(cachedWorkingModel ? [cachedWorkingModel] : []),
-    { ver: 'v1beta', name: 'gemini-2.0-flash' },
-    { ver: 'v1beta', name: 'gemini-1.5-flash-latest' },
-    { ver: 'v1',     name: 'gemini-1.5-flash' },
-    { ver: 'v1beta', name: 'gemini-1.5-flash-002' },
-    { ver: 'v1beta', name: 'gemini-1.5-flash' },
-    { ver: 'v1beta', name: 'gemini-1.5-pro-latest' },
-    { ver: 'v1beta', name: 'gemini-pro' }
+    { ver: 'v1beta', name: 'gemini-3.5-flash-lite' },
+    { ver: 'v1beta', name: 'gemini-3.1-flash-lite' },
+    { ver: 'v1beta', name: 'gemini-3.8-flash' },
+    { ver: 'v1beta', name: 'gemini-3.5-flash' },
+    { ver: 'v1beta', name: 'gemini-2.5-flash' }
   ];
 
   let lastError = null;
   for (const cand of candidateModels) {
-    const url = `https://generativelanguage.googleapis.com/${cand.ver}/models/${cand.name}:generateContent?key=${encodeURIComponent(activeKey)}`;
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': activeKey },
-        body: JSON.stringify(payload)
-      });
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      const url = `https://generativelanguage.googleapis.com/${cand.ver}/models/${cand.name}:generateContent?key=${encodeURIComponent(activeKey)}`;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': activeKey },
+          body: JSON.stringify(payload)
+        });
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        const msg = errJson.error?.message || `HTTP ${res.status}`;
-        if (res.status === 404 || msg.includes('not found')) {
-          continue;
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          const msg = errJson.error?.message || `HTTP ${res.status}`;
+
+          // If high demand spike (503) or rate limit (429), take a 5-second break as requested
+          if (res.status === 503 || res.status === 429) {
+            console.log(`[Gemini Client] ${cand.name} hit spike (${res.status}). Waiting 5 seconds before retry...`);
+            if (attempt < 2) {
+              await sleep(5000);
+              continue;
+            }
+          }
+
+          if (res.status === 404 || msg.includes('not found') || msg.includes('no longer available')) {
+            break; // Try next candidate model immediately
+          }
+          throw new Error(msg);
         }
-        throw new Error(msg);
-      }
 
-      const data = await res.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      
-      const codeBlockMatch = rawText.match(/```latex\s*([\s\S]*?)\s*```/i) || rawText.match(/```\s*([\s\S]*?)\s*```/i);
-      let newCode = '';
-      if (codeBlockMatch) {
-        newCode = codeBlockMatch[1].trim();
-      } else if (rawText.includes('\\documentclass')) {
-        const start = rawText.indexOf('\\documentclass');
-        const end = rawText.lastIndexOf('\\end{document}');
-        if (start !== -1 && end !== -1) {
-          newCode = rawText.substring(start, end + '\\end{document}'.length).trim();
+        const data = await res.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const rawText = parts.map(p => p.text || '').join('').trim();
+
+        const codeBlockMatch = rawText.match(/```latex\s*([\s\S]*?)\s*```/i) || rawText.match(/```\s*([\s\S]*?)\s*```/i);
+        let newCode = null;
+        let isCodeUpdate = false;
+
+        if (codeBlockMatch && codeBlockMatch[1].includes('\\documentclass')) {
+          newCode = codeBlockMatch[1].trim();
+          isCodeUpdate = newCode !== currentCode;
         }
-      }
 
-      const explanation = rawText
-        .replace(/```latex[\s\S]*?```/gi, '')
-        .replace(/```[\s\S]*?```/gi, '')
-        .trim() || 'Updated your resume code:';
+        const explanation = rawText
+          .replace(/```latex[\s\S]*?```/gi, '')
+          .replace(/```[\s\S]*?```/gi, '')
+          .trim() || (isCodeUpdate ? 'Updated your resume code:' : 'Here is what you need to know:');
 
-      cachedWorkingModel = cand;
-      return { newCode: newCode || currentCode, explanation };
-    } catch (err) {
-      lastError = err;
-      if (err.message && (err.message.includes('API_KEY_INVALID') || err.message.includes('permission') || err.message.includes('API key not valid'))) {
-        throw err;
+        cachedWorkingModel = cand;
+        return { isCodeUpdate, newCode: isCodeUpdate ? newCode : currentCode, explanation };
+      } catch (err) {
+        lastError = err;
+        if (err.message && (err.message.includes('API_KEY_INVALID') || err.message.includes('API key not valid'))) {
+          throw err;
+        }
+        if (attempt < 2) {
+          await sleep(5000);
+        }
       }
     }
   }
@@ -123,7 +139,7 @@ Strict Instructions:
   throw lastError || new Error('No available Gemini model found.');
 }
 
-// Built-in intelligent transformer (instant fallback when offline or before entering an API key)
+// Built-in intelligent conversational & code parser (offline/local fallback)
 function generateModifiedCode(currentCode, instruction, extraContext = '') {
   let text = currentCode;
 
@@ -134,8 +150,50 @@ function generateModifiedCode(currentCode, instruction, extraContext = '') {
   const lower = (instruction + ' ' + extraContext).toLowerCase();
   let explanation = '';
 
-  // 1. Font Size / Document Sizing intent
-  // Matches: "change font size to 10pt", "make font size 10pt", "change size to 11pt", "font size 10pt"
+  // 1. Check for Feedback / Troubleshooting Intent (e.g. "no changes after accepting")
+  if (
+    lower.includes('no change') ||
+    lower.includes('no changes') ||
+    lower.includes("didn't change") ||
+    lower.includes('did not change') ||
+    lower.includes('nothing happened') ||
+    lower.includes('not working') ||
+    lower.includes('stuck') ||
+    lower.includes('after accepting')
+  ) {
+    return {
+      isCodeUpdate: false,
+      newCode: currentCode,
+      explanation: "When you click 'Accept & Apply Code', the editor updates main.tex. To refresh the PDF preview on the right, make sure to click the green **Recompile** button at the top right of the editor. What specific changes would you like to make to your resume?"
+    };
+  }
+
+  // 2. Check for Greetings / Casual Chat
+  if (/^(?:hi|hello|hey|greetings|good\s+(?:morning|afternoon|evening))\b/i.test(inst)) {
+    return {
+      isCodeUpdate: false,
+      newCode: currentCode,
+      explanation: "Hello! I'm your AI Resume Consultant. I can help you adjust formatting, customize sections, polish bullet points with metrics, or tailor your resume for a job description. What would you like to work on?"
+    };
+  }
+
+  // 3. Check for Review / Feedback / Advice Requests
+  if (
+    lower.includes('review') ||
+    lower.includes('feedback') ||
+    lower.includes('how is this') ||
+    lower.includes('critique') ||
+    lower.includes('suggestions') ||
+    lower.includes('how can i improve')
+  ) {
+    return {
+      isCodeUpdate: false,
+      newCode: currentCode,
+      explanation: "I've reviewed your resume! Here are 3 targeted suggestions to make it stand out:\n\n1. **Action-Oriented Bullets**: Start bullet points with strong power verbs (e.g., 'Architected', 'Engineered', 'Streamlined') and quantify outcomes with metrics.\n2. **Skills Categorization**: Group your technical skills clearly (e.g., Languages, Frameworks, Cloud, Tools) for quick ATS parsing.\n3. **Page Density**: Keep section margins compact so all your key qualifications fit cleanly on a single page.\n\nTell me which section you'd like to update first!"
+    };
+  }
+
+  // 4. Font Size / Document Sizing intent
   const fontSizeMatch = inst.match(/(?:change|set|make|switch|adjust)?\s*(?:the\s+)?(?:font\s+size|text\s+size|document\s+size|size)\s+(?:to|as)?\s*(\d{1,2})\s*(?:pt)?/i) ||
                         inst.match(/\b(\d{1,2})\s*pt\b/i);
   if (fontSizeMatch) {
@@ -146,7 +204,7 @@ function generateModifiedCode(currentCode, instruction, extraContext = '') {
       return `\\documentclass[${newOpts}]{article}`;
     });
     explanation = `Changed document font size to ${pt}pt.`;
-    return { newCode: text, explanation };
+    return { isCodeUpdate: true, newCode: text, explanation };
   }
 
   // Make font bigger / increase text size
@@ -162,7 +220,7 @@ function generateModifiedCode(currentCode, instruction, extraContext = '') {
       return `\\documentclass[${opts.replace(/\b\d{1,2}pt\b/, `${nextPt}pt`)}]{article}`;
     });
     explanation = `Increased document font size to ${nextPt}pt.`;
-    return { newCode: text, explanation };
+    return { isCodeUpdate: true, newCode: text, explanation };
   }
 
   // Make font smaller / decrease text size
@@ -178,7 +236,7 @@ function generateModifiedCode(currentCode, instruction, extraContext = '') {
       return `\\documentclass[${opts.replace(/\b\d{1,2}pt\b/, `${nextPt}pt`)}]{article}`;
     });
     explanation = `Decreased document font size to ${nextPt}pt.`;
-    return { newCode: text, explanation };
+    return { isCodeUpdate: true, newCode: text, explanation };
   }
 
   // Compact layout / tighten spacing / fit 1 page
@@ -189,7 +247,7 @@ function generateModifiedCode(currentCode, instruction, extraContext = '') {
       .replace(/itemsep=-1pt/g, 'itemsep=-2pt')
       .replace(/\\vspace\{-6pt\}/g, '\\vspace{-8pt}');
     explanation = 'Adjusted margins and item spacing for a compact layout.';
-    return { newCode: text, explanation };
+    return { isCodeUpdate: true, newCode: text, explanation };
   }
 
   // Expand spacing / increase margins
@@ -200,16 +258,14 @@ function generateModifiedCode(currentCode, instruction, extraContext = '') {
       .replace(/itemsep=-2pt/g, 'itemsep=0pt')
       .replace(/\\vspace\{-8pt\}/g, '\\vspace{-4pt}');
     explanation = 'Increased document margins and section spacing.';
-    return { newCode: text, explanation };
+    return { isCodeUpdate: true, newCode: text, explanation };
   }
 
-  // 2. Candidate Name intent
-  // Matches: "change the name to tuffy", "change name to tuffy", "rename to tuffy", "my name is tuffy", "set name as tuffy"
+  // Candidate Name intent
   const nameIntent = inst.match(/(?:change|replace|update|rename|switch|modify|set)\s+(?:the\s+|candidate\s+|my\s+)?name\s+(?:to|with|into|as)\s+(.+)$/i) ||
                      inst.match(/^(?:my\s+name\s+is|rename\s+(?:to|as)?)\s+(.+)$/i);
   if (nameIntent) {
     let newName = nameIntent[1].trim().replace(/[.,;]+$/, '');
-    // Capitalize each word (e.g. "tuffy" -> "Tuffy")
     newName = newName.replace(/\b\w/g, l => l.toUpperCase());
 
     const headerNameMatch = text.match(/(\\begin\{center\}[\s\S]*?\\textbf\s*\{\s*(?:\\(?:Large|Huge|huge|LARGE)\s*)?(?:\\scshape\s*)?\{?)([A-Z][a-zA-Z\s.-]+?)(\}?\}\s*\\\\)/i) ||
@@ -217,85 +273,40 @@ function generateModifiedCode(currentCode, instruction, extraContext = '') {
                            text.match(/(\\textbf\s*\{\s*\\scshape\s*\\(?:Large|Huge|huge|LARGE)\s*\{?)([A-Z][a-zA-Z\s.-]+?)(\}?\}\s*\\\\)/i);
 
     if (headerNameMatch) {
-      const oldName = headerNameMatch[2];
       text = text.replace(headerNameMatch[0], `${headerNameMatch[1]}${newName}${headerNameMatch[3]}`);
-      
-      const oldSlug = oldName.toLowerCase().replace(/\s+/g, '');
-      const newSlug = newName.toLowerCase().replace(/\s+/g, '');
-      if (oldSlug.length > 3) {
-        text = text.replace(new RegExp(oldSlug, 'gi'), newSlug);
-      }
-
       explanation = `Changed candidate name to "${newName}".`;
-      return { newCode: text, explanation };
+      return { isCodeUpdate: true, newCode: text, explanation };
     }
   }
 
-  // 2. Email intent
+  // Email intent
   const emailIntent = inst.match(/(?:change|replace|update|set)\s+(?:the\s+|my\s+)?(?:email|mail)\s+(?:to|with|as)\s+([^\s]+)/i);
   if (emailIntent) {
     const newEmail = emailIntent[1].trim().replace(/[.,;]+$/, '');
     text = text.replace(/\\href\{mailto:[^}]+\}\{\\underline\{[^}]+\}\}/g, `\\href{mailto:${newEmail}}{\\underline{${newEmail}}}`);
     explanation = `Updated email to "${newEmail}".`;
-    return { newCode: text, explanation };
+    return { isCodeUpdate: true, newCode: text, explanation };
   }
 
-  // 3. Phone intent
+  // Phone intent
   const phoneIntent = inst.match(/(?:change|replace|update|set)\s+(?:the\s+|my\s+)?(?:phone|mobile|number|contact)\s+(?:to|with|as)\s+(.+)$/i);
   if (phoneIntent) {
     const newPhone = phoneIntent[1].trim().replace(/[.,;]+$/, '');
     text = text.replace(/(\$\|\$\s*)\+?[\d\s-]{8,18}(\s*\$\|\$)/, `$1${newPhone}$2`);
     explanation = `Updated phone number to "${newPhone}".`;
-    return { newCode: text, explanation };
+    return { isCodeUpdate: true, newCode: text, explanation };
   }
 
-  // 4. Location intent
+  // Location intent
   const locIntent = inst.match(/(?:change|replace|update|set)\s+(?:the\s+|my\s+)?(?:location|city|address)\s+(?:to|with|as)\s+(.+)$/i);
   if (locIntent) {
     const newLoc = locIntent[1].trim().replace(/[.,;]+$/, '');
     text = text.replace(/(\\begin\{center\}[\s\S]*?\\\\\s*\\vspace\{2pt\}\s*\n\s*)([^$|\n]+?)(\s*\$\|\$)/i, `$1${newLoc}$3`);
     explanation = `Updated location to "${newLoc}".`;
-    return { newCode: text, explanation };
+    return { isCodeUpdate: true, newCode: text, explanation };
   }
 
-  // 5. Direct "change/replace/update X to/with Y"
-  const changeMatch = inst.match(/(?:change|replace|update|rename|switch|modify|set)\s+(?:the\s+)?(.+?)\s+(?:to|with|into|as)\s+(.+)$/i);
-  if (changeMatch) {
-    const rawTarget = changeMatch[1].trim();
-    const replacement = changeMatch[2].trim();
-
-    // If target is "project" or "the project"
-    if (/^(?:the\s+)?project/i.test(rawTarget)) {
-      const projSectionMatch = text.match(/(\\section\{[^}]*Projects?[^}]*\}[\s\S]*?\\textbf\{)([^}]+)(\}[\s\S]*?\\textit\{)([^}]+)(\}[\s\S]*?\\begin\{itemize\}[^\]]*\])([\s\S]*?)(\\end\{itemize\})/i);
-      if (projSectionMatch) {
-        const newProjTitle = replacement;
-        const newBullets = `\n        \\small\\item{Designed and implemented ${replacement} architecture, supporting high-throughput enterprise workflows.}
-        \\small\\item{Configured declarative automations (Flows) and data validation rules to resolve operational intake bottlenecks.}
-        \\small\\item{Maintained strict compliance standards, role hierarchies, and system documentation to eliminate tier-1 escalations.}`;
-        
-        text = text.replace(projSectionMatch[0], `${projSectionMatch[1]}${newProjTitle}${projSectionMatch[3]}Flow Builder, Apex, Cloud Architecture${projSectionMatch[5]}${newBullets}\n      ${projSectionMatch[7]}`);
-        explanation = `Updated project to "${replacement}" with complete technical details and bullets.`;
-        return { newCode: text, explanation };
-      }
-    }
-
-    // Word replacement: STRICTLY inside document body with word boundaries to never corrupt preamble packages
-    const targetClean = rawTarget.replace(/^(?:the\s+|my\s+)/i, '');
-    const docMatch = text.match(/(\\begin\{document\})([\s\S]*?)(\\end\{document\})/);
-    if (docMatch) {
-      const docBody = docMatch[2];
-      const escaped = targetClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const wordRegex = new RegExp(`\\b${escaped}\\b`, 'i');
-      if (wordRegex.test(docBody)) {
-        const newBody = docBody.replace(wordRegex, replacement);
-        text = `${docMatch[1]}${newBody}${docMatch[3]}`;
-        explanation = `Replaced "${targetClean}" with "${replacement}".`;
-        return { newCode: text, explanation };
-      }
-    }
-  }
-
-  // 6. Add / include / insert X into Y
+  // Add skill or certification
   const addMatch = inst.match(/(?:add|insert|include|append)\s+(.+?)(?:\s+(?:to|in|into)\s+(?:the\s+)?(.+))?$/i);
   if (addMatch) {
     const itemToAdd = addMatch[1].trim();
@@ -306,7 +317,7 @@ function generateModifiedCode(currentCode, instruction, extraContext = '') {
       if (skillsMatch) {
         text = text.replace(skillsMatch[0], `${skillsMatch[1]}${skillsMatch[2]}, ${itemToAdd}${skillsMatch[3]}`);
         explanation = `Added "${itemToAdd}" to Skills.`;
-        return { newCode: text, explanation };
+        return { isCodeUpdate: true, newCode: text, explanation };
       }
     }
 
@@ -315,94 +326,37 @@ function generateModifiedCode(currentCode, instruction, extraContext = '') {
       if (certMatch) {
         text = text.replace(certMatch[0], `${certMatch[1]}${certMatch[2]} $|$ ${itemToAdd}${certMatch[3]}`);
         explanation = `Added "${itemToAdd}" to Certifications.`;
-        return { newCode: text, explanation };
+        return { isCodeUpdate: true, newCode: text, explanation };
       }
     }
   }
 
-  // 3. Project keywords
-  if (lower.includes('project') || lower.includes('portal') || lower.includes('fintech') || lower.includes('healthcare') || lower.includes('ecommerce') || lower.includes('ai agent') || lower.includes('events hub')) {
-    const projSectionMatch = text.match(/(\\section\{[^}]*Projects?[^}]*\}[\s\S]*?\\begin\{tabular\*\}[^\n]*\n\s*\\textbf\{)([^}]+)(\}[\s\S]*?\\textit\{)([^}]+)(\}[\s\S]*?\\begin\{itemize\}[^\]]*\])([\s\S]*?)(\\end\{itemize\})/i);
-    if (projSectionMatch) {
-      let title = 'Enterprise Cloud Workflow Platform';
-      let tags = 'Flow Builder, REST APIs, Security';
-      if (lower.includes('health') || lower.includes('patient')) {
-        title = 'CareSync (Healthcare AI Patient Portal)';
-        tags = 'Agentforce, HIPAA, Flow Builder';
-      } else if (lower.includes('fintech') || lower.includes('pay')) {
-        title = 'ApexPay (Enterprise FinTech Transaction Engine)';
-        tags = 'Apex, REST APIs, Flow Builder';
-      } else if (lower.includes('ecommerce') || lower.includes('shop')) {
-        title = 'OmniCommerce (Scalable B2B Order Platform)';
-        tags = 'Apex, LWC, Flow Builder, Stripe';
-      } else {
-        title = 'AgentForce Intelligent CRM Hub';
-        tags = 'Agentforce AI, Prompt Builder, Flows';
+  // Direct word or section replacement
+  const changeMatch = inst.match(/(?:change|replace|update|rename|switch|modify|set)\s+(?:the\s+)?(.+?)\s+(?:to|with|into|as)\s+(.+)$/i);
+  if (changeMatch) {
+    const rawTarget = changeMatch[1].trim();
+    const replacement = changeMatch[2].trim();
+    const targetClean = rawTarget.replace(/^(?:the\s+|my\s+)/i, '');
+    const docMatch = text.match(/(\\begin\{document\})([\s\S]*?)(\\end\{document\})/);
+    if (docMatch) {
+      const docBody = docMatch[2];
+      const escaped = targetClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const wordRegex = new RegExp(`\\b${escaped}\\b`, 'i');
+      if (wordRegex.test(docBody)) {
+        const newBody = docBody.replace(wordRegex, replacement);
+        text = `${docMatch[1]}${newBody}${docMatch[3]}`;
+        explanation = `Replaced "${targetClean}" with "${replacement}".`;
+        return { isCodeUpdate: true, newCode: text, explanation };
       }
-
-      const bullets = `\n        \\small\\item{Architected and deployed ${title} serving 800+ active enterprise stakeholders, reducing manual processing lag by 35\\%.}
-        \\small\\item{Designed declarative automations using Flow Builder and validation rules to ensure 100\\% data integrity and eliminate intake bottlenecks.}
-        \\small\\item{Maintained strict Role-Based Access Control (RBAC) and field-level permissions to ensure compliance with audit readiness benchmarks.}`;
-
-      text = text.replace(projSectionMatch[0], `${projSectionMatch[1]}${title}${projSectionMatch[3]}${tags}${projSectionMatch[5]}${bullets}\n      ${projSectionMatch[7]}`);
-      explanation = `Updated project to "${title}".`;
-      return { newCode: text, explanation };
     }
   }
 
-  // 4. Skills keywords (cloud, devops, aws, docker, python, etc.)
-  if (lower.includes('skill') || lower.includes('aws') || lower.includes('docker') || lower.includes('cloud') || lower.includes('devops') || lower.includes('ci/cd')) {
-    const skillsMatch = text.match(/\\section\{[^}]*Skills?[^}]*\}[\s\S]*?\\end\{itemize\}/i);
-    if (skillsMatch) {
-      const updatedSkills = `\\section{Technical \\& Platform Administration Skills}
- \\begin{itemize}[leftmargin=0.15in, label={}, itemsep=-1pt]
-    \\small{\\item{
-     \\textbf{Salesforce Declarative}{: Flow Builder, Validation Rules, Field-Level Security (FLS), Role Hierarchy, Access Management} \\\\
-     \\textbf{Coding \\& Cloud Integration}{: Apex, Python, SQL, SOQL, AWS Cloud, Docker, CI/CD Pipelines, REST APIs} \\\\
-     \\textbf{Incident \\& Support}{: Root-Cause Analysis (RCA), Agentforce, Escalation Management, SLA Tracking (FRT/ART)} \\\\
-     \\textbf{Process Engineering}{: Standard Operating Procedures (SOPs), Incident Handoffs, Agile/SDLC, System Documentation}
-    }}
- \\end{itemize}`;
-      text = text.replace(skillsMatch[0], updatedSkills);
-      explanation = 'Updated technical skills with Cloud, DevOps, and Integration competencies.';
-      return { newCode: text, explanation };
-    }
-  }
-
-  // 5. Summary / Objective enhancement
-  if (lower.includes('summary') || lower.includes('punchy') || lower.includes('stronger') || lower.includes('senior') || lower.includes('shorten') || lower.includes('about me')) {
-    const summaryMatch = text.match(/(\\section\{Professional Summary\}\s*\\vspace\{1pt\}\s*\n)([\s\S]*?)(\n\s*\\vspace\{-4pt\})/i);
-    if (summaryMatch) {
-      const newSummary = `B.Tech Computer Science graduate (2026) and certified Salesforce Trailblazer specializing in declarative automation, Agentforce AI systems, and cloud integrations. 100K Agentblazer Champion with 18 Trailhead Superbadges, recognized for architecting mission-critical Flows, orchestrating scalable data pipelines, and resolving complex system bottlenecks with thorough root-cause analysis (RCA).`;
-      text = text.replace(summaryMatch[0], `${summaryMatch[1]}${newSummary}${summaryMatch[3]}`);
-      explanation = 'Rewrote Professional Summary with punchy, high-impact phrasing.';
-      return { newCode: text, explanation };
-    }
-  }
-
-  // 6. Experience / metrics / numbers enhancement
-  if (lower.includes('experience') || lower.includes('metric') || lower.includes('number') || lower.includes('bullet') || lower.includes('smartbridge')) {
-    const expMatch = text.match(/(\\small\\item\{Supported enterprise AI CRM platforms[\s\S]*?First Response Time\) were consistently met\.\})/i);
-    if (expMatch) {
-      const enhancedBullets = `\\small\\item{Supported enterprise AI CRM platforms, configuring Agentforce and declarative Flows to automate 4,500+ monthly case intakes, cutting manual Tier-1 support overhead by 34\\%.}
-        \\small\\item{Acted as frontline responder for declarative and REST integration issues, diagnosing 80+ recurring pipeline defects and publishing RCA playbooks that reduced resolution latency by 25\\%.}
-        \\small\\item{Proactively monitored operational telemetry and escalation trends, sustaining a 99.4\\% First Response Time (FRT) SLA across distributed stakeholder teams.}`;
-      text = text.replace(expMatch[0], enhancedBullets);
-      explanation = 'Enhanced experience bullets with quantified % metrics and throughput numbers.';
-      return { newCode: text, explanation };
-    }
-  }
-
-  // 7. General fallback: ALWAYS applies an intelligent optimization for the prompt!
-  const summaryMatch = text.match(/(\\section\{Professional Summary\}\s*\\vspace\{1pt\}\s*\n)([\s\S]*?)(\n\s*\\vspace\{-4pt\})/i);
-  if (summaryMatch) {
-    const enhancedSummary = `B.Tech Computer Science graduate (2026) and certified Salesforce Trailblazer specializing in declarative automation, Agentforce AI systems, and cloud integrations. 100K Agentblazer Champion with 18 Trailhead Superbadges, adept at designing mission-critical Flows, orchestrating scalable data pipelines, and conducting rigorous root-cause analysis (RCA) to maximize CRM reliability.`;
-    text = text.replace(summaryMatch[0], `${summaryMatch[1]}${enhancedSummary}${summaryMatch[3]}`);
-    explanation = `Applied resume optimization for: "${instruction}".`;
-    return { newCode: text, explanation };
-  }
-
-  return { newCode: text, explanation: 'Updated resume code.' };
+  // General conversational response (NO FAKE HARDCODED SUMMARY INJECTIONS!)
+  return {
+    isCodeUpdate: false,
+    newCode: currentCode,
+    explanation: `I understood "${instruction}". Tell me what specific section you would like to modify (e.g. 'Change font size to 10pt', 'Add Docker to skills', or 'Change location to City, State').`
+  };
 }
 
 function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
@@ -468,25 +422,45 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
     try {
       let modifiedCode = currentCode;
       let aiExplanation = '';
+      let isCodeUpdate = false;
 
-      const activeKey = apiKey || DEFAULT_API_KEY;
-
-      // Try Google Gemini API
+      // 1. Try Backend AI Endpoint first (runs server-side with Gemini flash models & auto-retry)
       try {
-        const result = await callGeminiApi(activeKey, currentCode, text);
-        modifiedCode = result.newCode;
-        aiExplanation = result.explanation;
-      } catch (apiErr) {
-        console.warn('Gemini API call failed, falling back to local transformer:', apiErr);
-        const localRes = generateModifiedCode(currentCode, text);
-        modifiedCode = localRes.newCode;
-        aiExplanation = `✨ ${localRes.explanation}`;
+        const backendRes = await api.ai.chat(newChat, currentCode, text);
+        if (backendRes && (backendRes.text || backendRes.newCode)) {
+          aiExplanation = backendRes.text || 'I have updated your resume code:';
+          if (backendRes.isCodeUpdate && backendRes.newCode && backendRes.newCode !== currentCode) {
+            modifiedCode = backendRes.newCode;
+            isCodeUpdate = true;
+          }
+        }
+      } catch (backendErr) {
+        console.warn('Backend AI chat error, trying direct Gemini client:', backendErr);
+
+        // 2. Direct Gemini API call with auto-retry and 5s backoff
+        try {
+          const directRes = await callGeminiApi(apiKey || DEFAULT_API_KEY, currentCode, text);
+          aiExplanation = directRes.explanation;
+          if (directRes.isCodeUpdate && directRes.newCode && directRes.newCode !== currentCode) {
+            modifiedCode = directRes.newCode;
+            isCodeUpdate = true;
+          }
+        } catch (directErr) {
+          console.warn('Direct Gemini API call failed, falling back to local intent parser:', directErr);
+
+          // 3. Built-in conversational parser
+          const localRes = generateModifiedCode(currentCode, text);
+          aiExplanation = localRes.explanation;
+          if (localRes.isCodeUpdate && localRes.newCode && localRes.newCode !== currentCode) {
+            modifiedCode = localRes.newCode;
+            isCodeUpdate = true;
+          }
+        }
       }
 
-      const hasChanges = modifiedCode !== currentCode;
       const aiMsgId = 'ai-' + Date.now();
 
-      if (hasChanges) {
+      if (isCodeUpdate && modifiedCode !== currentCode) {
         setChatHistory([
           ...newChat,
           {
@@ -504,7 +478,7 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
           {
             id: aiMsgId,
             sender: 'ai',
-            text: `I understood "${text}". Tell me what specific section to change (e.g. 'Change project to Healthcare Portal', 'Change location to Pune', 'Add Docker to skills').`,
+            text: aiExplanation || `I understood "${text}". Tell me what specific section to change (e.g. 'Change font size to 10pt', 'Change location to New York', 'Add Docker to skills').`,
             hasDiff: false,
           }
         ]);
