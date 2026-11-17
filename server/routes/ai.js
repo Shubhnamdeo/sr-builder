@@ -55,11 +55,15 @@ YOUR BEHAVIOR GUIDELINES:
    - If the user says "no changes after accepting", "didn't change", or similar troubleshooting feedback:
      Explain warmly: "When you click 'Accept & Apply Code', the editor updates main.tex. To update the visual PDF preview on the right, please click the green 'Recompile' button at the top right of the editor. What specific changes would you like to make to your resume?"
 3. CONCRETE RESUME CODE MODIFICATIONS:
-   - ONLY when the user explicitly asks to modify, format, rewrite, tailor, or add/remove something in their resume:
+   - When the user asks to modify, format, add, or rewrite something in their resume (such as:
+     * Adding or changing work experience, jobs, or internships (e.g. 'add software developer at Deloitte with 5 months experience')
+     * Adding skills, projects, certifications, or education
+     * Changing font size, margins, spacing, or contact details):
      1. Briefly explain what you updated in 1 friendly conversational sentence.
      2. Output the COMPLETE updated LaTeX document inside a single \`\`\`latex ... \`\`\` code block.
-     3. Make sure the LaTeX code compiles cleanly with valid syntax and no missing brackets or broken packages.
-     4. Never invent fake personal details or add unsolicited text.`;
+     3. For any new job or experience, create a clean entry with company name, job title, duration, and 2-3 strong, quantifiable bullet points formatted with standard LaTeX list tags.
+     4. Make sure the LaTeX code compiles cleanly with valid syntax and no missing brackets or broken packages.
+     5. Never invent fake personal contact details.`;
 
     const payload = {
       contents: [{ parts: [{ text: systemPrompt }] }],
@@ -94,7 +98,8 @@ YOUR BEHAVIOR GUIDELINES:
 
           if (response.ok) {
             const data = await response.json();
-            rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const parts = data.candidates?.[0]?.content?.parts || [];
+            rawText = parts.map(p => p.text || '').join('');
             if (rawText) {
               usedModel = model;
               break;

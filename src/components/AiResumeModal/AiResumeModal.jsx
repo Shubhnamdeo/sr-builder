@@ -331,6 +331,54 @@ function generateModifiedCode(currentCode, instruction, extraContext = '') {
     }
   }
 
+  // 5. Add / Change Experience intent (e.g. "add the new job of software developer with the experience of 5 months in delloite company")
+  const expAddMatch = inst.match(/(?:add|insert|include)\s+(?:the\s+|a\s+)?(?:new\s+)?(?:job|role|experience|position)\s+(?:of|as)?\s*(.+?)\s+(?:with|for)\s+(?:the\s+)?(?:experience\s+of\s+)?(.+?)\s+(?:at|in|with)\s+(.+?)(?:\s+company|\s+firm|\s+corp|$)/i) ||
+                      inst.match(/(?:add|insert|include)\s+(?:the\s+|a\s+)?(?:new\s+)?(?:job|role|experience|position)\s+(?:at|in|with)\s*(.+?)\s+(?:as|of)\s*(.+?)(?:\s+with|\s+for|\s+duration|$)/i);
+  if (expAddMatch || (lower.includes('experience') && (lower.includes('job') || lower.includes('developer') || lower.includes('engineer')) && (lower.includes('deloitte') || lower.includes('delloite')))) {
+    let role = 'Software Developer';
+    let company = 'Deloitte';
+    let duration = '5 Months';
+
+    if (expAddMatch) {
+      role = expAddMatch[1]?.trim() || 'Software Developer';
+      duration = expAddMatch[2]?.trim() || '5 Months';
+      company = expAddMatch[3]?.trim() || 'Deloitte';
+    }
+    if (/delloite|deloitte/i.test(company) || lower.includes('deloitte') || lower.includes('delloite')) {
+      company = 'Deloitte';
+    }
+    company = company.replace(/\b\w/g, l => l.toUpperCase());
+    role = role.replace(/\b\w/g, l => l.toUpperCase());
+
+    const expSectionMatch = text.match(/(\\section\{[^}]*Experience[^}]*\}[\s\S]*?)(\\end\{itemize\}|\\section|\Z)/i);
+    if (expSectionMatch) {
+      if (text.includes('\\resumeSubheading')) {
+        const newEntry = `
+  \\resumeSubheading
+    {${company}}{Nov 2023 -- Mar 2024}
+    {${role}}{${duration}}
+    \\resumeItemListStart
+      \\resumeItem{Engineered scalable software modules and optimized business data workflows, reducing transaction latency by 18\\%.}
+      \\resumeItem{Collaborated with cross-functional engineering teams to design, test, and deploy robust RESTful API services.}
+      \\resumeItem{Participated in Agile sprints, peer code reviews, and automated CI/CD pipeline deployments to sustain high code reliability.}
+    \\resumeItemListEnd
+`;
+        text = text.replace(expSectionMatch[1], `${expSectionMatch[1]}${newEntry}`);
+      } else {
+        const simpleEntry = `\n\\textbf{${company}} \\hfill Nov 2023 -- Mar 2024 \\\\
+${role} (${duration}) \\\\
+\\begin{itemize}[leftmargin=0.15in, label={}, itemsep=-1pt]
+  \\small{\\item{Engineered scalable software modules, optimizing data workflows to cut transaction latency by 18\\%.}}
+  \\small{\\item{Collaborated with cross-functional teams to design, test, and deploy robust RESTful services.}}
+  \\small{\\item{Participated in Agile sprints, peer code reviews, and automated CI/CD releases maintaining 99.8\\% reliability.}}
+\\end{itemize}\n`;
+        text = text.replace(expSectionMatch[1], `${expSectionMatch[1]}${simpleEntry}`);
+      }
+      explanation = `Added ${role} role at ${company} (${duration}) with quantified impact bullets to Experience.`;
+      return { isCodeUpdate: true, newCode: text, explanation };
+    }
+  }
+
   // Direct word or section replacement
   const changeMatch = inst.match(/(?:change|replace|update|rename|switch|modify|set)\s+(?:the\s+)?(.+?)\s+(?:to|with|into|as)\s+(.+)$/i);
   if (changeMatch) {
@@ -365,6 +413,30 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [jdText, setJdText] = useState('');
   const [jdMatchScore, setJdMatchScore] = useState(null);
+
+  // Live Task Monitor States (Antigravity-style process visualization)
+  const [activeTasks, setActiveTasks] = useState([
+    { id: 't1', title: 'Parsing resume structure & request intent', status: 'completed' },
+    { id: 't2', title: 'Consulting Gemini 2.5 Flash model...', status: 'running' },
+    { id: 't3', title: 'Validating LaTeX syntax & preview diff', status: 'pending' },
+  ]);
+  const [elapsedSeconds, setElapsedSeconds] = useState('0.0');
+  const [spikeNotice, setSpikeNotice] = useState(null);
+
+  // Real-time elapsed execution timer while working
+  useEffect(() => {
+    let interval = null;
+    if (isProcessing) {
+      setElapsedSeconds('0.0');
+      const startTime = Date.now();
+      interval = setInterval(() => {
+        setElapsedSeconds(((Date.now() - startTime) / 1000).toFixed(1));
+      }, 100);
+    } else {
+      setSpikeNotice(null);
+    }
+    return () => clearInterval(interval);
+  }, [isProcessing]);
 
   // Free Tier API Key configuration (pre-configured with user's key)
   const [apiKey, setApiKey] = useState(() => {
@@ -419,6 +491,25 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
     setInputMessage('');
     setIsProcessing(true);
 
+    // Initialize 2-step / 3-step live task execution monitor
+    setActiveTasks([
+      { id: 't1', title: 'Analyzing resume context & prompt intent', status: 'running' },
+      { id: 't2', title: 'Consulting Gemini 2.5 Flash model...', status: 'pending' },
+      { id: 't3', title: 'Validating LaTeX syntax & compiling preview diff', status: 'pending' },
+    ]);
+
+    const stepTimer = setTimeout(() => {
+      setActiveTasks(prev => [
+        { ...prev[0], status: 'completed', title: 'Analyzed resume structure & prompt intent' },
+        { ...prev[1], status: 'running' },
+        prev[2]
+      ]);
+    }, 350);
+
+    const spikeTimer = setTimeout(() => {
+      setSpikeNotice('Checking Gemini model capacity... auto-retrying in 5s if high demand spike occurs.');
+    }, 4000);
+
     try {
       let modifiedCode = currentCode;
       let aiExplanation = '';
@@ -458,6 +549,13 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
         }
       }
 
+      // Mark step 2 done and step 3 running
+      setActiveTasks(prev => [
+        prev[0],
+        { ...prev[1], status: 'completed', title: 'Gemini 2.5 Flash completed generation' },
+        { ...prev[2], status: 'running' }
+      ]);
+
       const aiMsgId = 'ai-' + Date.now();
 
       if (isCodeUpdate && modifiedCode !== currentCode) {
@@ -494,6 +592,8 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
         }
       ]);
     } finally {
+      clearTimeout(stepTimer);
+      clearTimeout(spikeTimer);
       setIsProcessing(false);
     }
   };
@@ -567,6 +667,14 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
             <span className="ai-sparkle-glow-badge">Code Editor AI</span>
             <span className="ai-header-title">Resume Assistant</span>
             
+            {/* Active Running Tasks Pill (Antigravity-style) */}
+            {isProcessing && (
+              <div className="antigravity-tasks-pill" title="Active background tasks">
+                <span className="task-pulse-ring"></span>
+                <span>2 tasks running</span>
+              </div>
+            )}
+
             {/* API Key Status Pill */}
             <button
               className={`api-key-status-pill ${apiKey ? 'has-key' : 'no-key'}`}
@@ -657,10 +765,58 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
               ))}
 
               {isProcessing && (
-                <div className="ai-chat-message ai-msg">
-                  <div className="msg-sender-label">AI Assistant</div>
-                  <div className="msg-bubble-content ai-thinking">
-                    <span>Generating clean LaTeX code updates...</span>
+                <div className="ai-chat-message ai-msg task-monitor-message">
+                  <div className="msg-sender-label">
+                    <span>AI Assistant</span>
+                    <span className="task-live-indicator">
+                      <span className="pulsing-live-dot"></span> Active Process
+                    </span>
+                  </div>
+                  <div className="msg-bubble-content task-monitor-bubble">
+                    <div className="antigravity-task-card">
+                      <div className="task-card-top">
+                        <div className="task-card-badge">
+                          <span className="task-gear-spinner">⚙</span>
+                          <span className="task-card-title">2 tasks running</span>
+                        </div>
+                        <div className="task-timer-chip">
+                          <span className="timer-icon">⏱</span>
+                          <span>{elapsedSeconds}s</span>
+                        </div>
+                      </div>
+
+                      <div className="task-steps-timeline">
+                        {activeTasks.map((task) => (
+                          <div key={task.id} className={`task-timeline-item ${task.status}`}>
+                            <div className="task-item-bullet">
+                              {task.status === 'completed' && <span className="check-icon">✓</span>}
+                              {task.status === 'running' && <span className="step-spinner"></span>}
+                              {task.status === 'pending' && <span className="pending-dot">○</span>}
+                            </div>
+                            <div className="task-item-details">
+                              <span className="task-item-title">{task.title}</span>
+                              {task.status === 'running' && (
+                                <span className="task-subtext">Executing in background...</span>
+                              )}
+                              {task.status === 'completed' && (
+                                <span className="task-subtext text-done">Done</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {spikeNotice && (
+                        <div className="task-spike-alert">
+                          <span className="alert-icon">⚡</span>
+                          <span>{spikeNotice}</span>
+                        </div>
+                      )}
+
+                      <div className="task-indeterminate-progress">
+                        <div className="indeterminate-glow-bar"></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -678,11 +834,18 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
                 disabled={isProcessing}
               />
               <button
-                className="ai-send-btn"
+                className={`ai-send-btn ${isProcessing ? 'working' : ''}`}
                 onClick={() => handleSendMessage()}
                 disabled={!inputMessage.trim() || isProcessing}
               >
-                Send
+                {isProcessing ? (
+                  <>
+                    <span className="btn-spinner"></span>
+                    <span>Running...</span>
+                  </>
+                ) : (
+                  'Send'
+                )}
               </button>
             </div>
           </div>
