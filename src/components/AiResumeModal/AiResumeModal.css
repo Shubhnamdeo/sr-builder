@@ -1177,3 +1177,82 @@
   animation: spinStep 0.8s linear infinite;
   display: inline-block;
 }
+
+/* Stop Process Buttons & Actions */
+.stop-process-btn {
+  background: linear-gradient(135deg, #e11d48, #be123c) !important;
+  border: 1px solid #f43f5e !important;
+  color: #ffffff !important;
+  cursor: pointer !important;
+  box-shadow: 0 0 12px rgba(225, 29, 72, 0.45) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-weight: 700 !important;
+  transition: all 0.15s ease !important;
+  opacity: 1 !important;
+}
+
+.stop-process-btn:hover {
+  background: linear-gradient(135deg, #f43f5e, #e11d48) !important;
+  box-shadow: 0 0 18px rgba(244, 63, 94, 0.65) !important;
+  transform: translateY(-1px);
+}
+
+.stop-square-icon {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.task-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-stop-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(225, 29, 72, 0.18);
+  border: 1px solid rgba(244, 63, 94, 0.45);
+  color: #fda4af;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.task-stop-chip-btn:hover {
+  background: rgba(225, 29, 72, 0.35);
+  border-color: #f43f5e;
+  color: #ffffff;
+}
+
+.task-stop-chip-btn .stop-square {
+  font-size: 8px;
+}
+
+.antigravity-tasks-pill.clickable {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.antigravity-tasks-pill.clickable:hover {
+  background: rgba(225, 29, 72, 0.18);
+  border-color: #f43f5e;
+  color: #fda4af;
+}
+
+.header-stop-tag {
+  background: rgba(225, 29, 72, 0.3);
+  border: 1px solid rgba(244, 63, 94, 0.5);
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-size: 9.5px;
+  font-weight: 700;
+  margin-left: 3px;
+  color: #ffffff;
+}

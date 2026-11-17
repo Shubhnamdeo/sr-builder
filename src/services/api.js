@@ -99,10 +99,11 @@ export const api = {
 
   // AI Assistant Endpoints
   ai: {
-    chat: (messages, currentCode, userInstruction) =>
+    chat: (messages, currentCode, userInstruction, options = {}) =>
       request('/ai/chat', {
         method: 'POST',
         body: JSON.stringify({ messages, currentCode, userInstruction }),
+        ...options,
       }),
   },
 };

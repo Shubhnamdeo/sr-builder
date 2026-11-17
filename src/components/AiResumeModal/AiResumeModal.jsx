@@ -37,7 +37,7 @@ let cachedWorkingModel = null;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Multi-candidate Gemini caller: uses active Google Generative Language models with auto-retry and 5s break
-async function callGeminiApi(apiKey, currentCode, userInstruction) {
+async function callGeminiApi(apiKey, currentCode, userInstruction, signal = null) {
   const activeKey = (apiKey || DEFAULT_API_KEY).trim();
   const prompt = `You are an expert AI Resume Consultant, Career Advisor, and LaTeX Engineer for "SR Builder".
 The user is working on their LaTeX resume.
@@ -58,6 +58,7 @@ Strict Guidelines:
 2. If the user specifically asks to modify, format, change, or rewrite their resume:
    - Provide a brief 1-sentence friendly explanation.
    - Output the COMPLETE updated compilable LaTeX code inside a \`\`\`latex ... \`\`\` block.
+   - Support multi-page resumes (1 page, 2 pages, and up to 5 pages) based on content volume. When the user provides extensive experience, projects, or additional sections, allow the document to naturally expand into 2, 3, 4, or up to 5 pages. Insert \`\\newpage\` between major sections when appropriate for clean page transitions.
    - Never corrupt packages or inject fake user data.`;
 
   const payload = {
@@ -82,7 +83,8 @@ Strict Guidelines:
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': activeKey },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal
         });
 
         if (!res.ok) {
@@ -422,6 +424,26 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
   ]);
   const [elapsedSeconds, setElapsedSeconds] = useState('0.0');
   const [spikeNotice, setSpikeNotice] = useState(null);
+  const abortControllerRef = useRef(null);
+
+  // Stop / Cancel active AI processing immediately
+  const handleStopProcess = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsProcessing(false);
+    setSpikeNotice(null);
+    setChatHistory(prev => [
+      ...prev,
+      {
+        id: 'stop-' + Date.now(),
+        sender: 'ai',
+        text: '⏹ Process stopped by user.',
+        hasDiff: false,
+      }
+    ]);
+  };
 
   // Real-time elapsed execution timer while working
   useEffect(() => {
@@ -491,6 +513,9 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
     setInputMessage('');
     setIsProcessing(true);
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     // Initialize 2-step / 3-step live task execution monitor
     setActiveTasks([
       { id: 't1', title: 'Analyzing resume context & prompt intent', status: 'running' },
@@ -517,7 +542,7 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
 
       // 1. Try Backend AI Endpoint first (runs server-side with Gemini flash models & auto-retry)
       try {
-        const backendRes = await api.ai.chat(newChat, currentCode, text);
+        const backendRes = await api.ai.chat(newChat, currentCode, text, { signal: abortController.signal });
         if (backendRes && (backendRes.text || backendRes.newCode)) {
           aiExplanation = backendRes.text || 'I have updated your resume code:';
           if (backendRes.isCodeUpdate && backendRes.newCode && backendRes.newCode !== currentCode) {
@@ -526,17 +551,23 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
           }
         }
       } catch (backendErr) {
+        if (backendErr.name === 'AbortError' || backendErr.message?.includes('aborted')) {
+          return;
+        }
         console.warn('Backend AI chat error, trying direct Gemini client:', backendErr);
 
         // 2. Direct Gemini API call with auto-retry and 5s backoff
         try {
-          const directRes = await callGeminiApi(apiKey || DEFAULT_API_KEY, currentCode, text);
+          const directRes = await callGeminiApi(apiKey || DEFAULT_API_KEY, currentCode, text, abortController.signal);
           aiExplanation = directRes.explanation;
           if (directRes.isCodeUpdate && directRes.newCode && directRes.newCode !== currentCode) {
             modifiedCode = directRes.newCode;
             isCodeUpdate = true;
           }
         } catch (directErr) {
+          if (directErr.name === 'AbortError' || directErr.message?.includes('aborted')) {
+            return;
+          }
           console.warn('Direct Gemini API call failed, falling back to local intent parser:', directErr);
 
           // 3. Built-in conversational parser
@@ -582,6 +613,10 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
         ]);
       }
     } catch (err) {
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        console.log('AI processing aborted by user.');
+        return;
+      }
       setChatHistory([
         ...newChat,
         {
@@ -594,6 +629,7 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
     } finally {
       clearTimeout(stepTimer);
       clearTimeout(spikeTimer);
+      abortControllerRef.current = null;
       setIsProcessing(false);
     }
   };
@@ -669,9 +705,14 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
             
             {/* Active Running Tasks Pill (Antigravity-style) */}
             {isProcessing && (
-              <div className="antigravity-tasks-pill" title="Active background tasks">
+              <div
+                className="antigravity-tasks-pill clickable"
+                onClick={handleStopProcess}
+                title="Process running — Click to Stop"
+              >
                 <span className="task-pulse-ring"></span>
                 <span>2 tasks running</span>
+                <span className="header-stop-tag">■ Stop</span>
               </div>
             )}
 
@@ -779,9 +820,19 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
                           <span className="task-gear-spinner">⚙</span>
                           <span className="task-card-title">2 tasks running</span>
                         </div>
-                        <div className="task-timer-chip">
-                          <span className="timer-icon">⏱</span>
-                          <span>{elapsedSeconds}s</span>
+                        <div className="task-top-actions">
+                          <div className="task-timer-chip">
+                            <span className="timer-icon">⏱</span>
+                            <span>{elapsedSeconds}s</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="task-stop-chip-btn"
+                            onClick={handleStopProcess}
+                            title="Stop AI generation immediately"
+                          >
+                            <span className="stop-square">■</span> Stop
+                          </button>
                         </div>
                       </div>
 
@@ -834,14 +885,16 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
                 disabled={isProcessing}
               />
               <button
-                className={`ai-send-btn ${isProcessing ? 'working' : ''}`}
-                onClick={() => handleSendMessage()}
-                disabled={!inputMessage.trim() || isProcessing}
+                type="button"
+                className={`ai-send-btn ${isProcessing ? 'stop-process-btn' : ''}`}
+                onClick={isProcessing ? handleStopProcess : () => handleSendMessage()}
+                disabled={!isProcessing && !inputMessage.trim()}
+                title={isProcessing ? "Click to stop process" : "Send instruction"}
               >
                 {isProcessing ? (
                   <>
-                    <span className="btn-spinner"></span>
-                    <span>Running...</span>
+                    <span className="stop-square-icon">■</span>
+                    <span>Stop ({elapsedSeconds}s)</span>
                   </>
                 ) : (
                   'Send'

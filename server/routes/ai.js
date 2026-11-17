@@ -62,8 +62,9 @@ YOUR BEHAVIOR GUIDELINES:
      1. Briefly explain what you updated in 1 friendly conversational sentence.
      2. Output the COMPLETE updated LaTeX document inside a single \`\`\`latex ... \`\`\` code block.
      3. For any new job or experience, create a clean entry with company name, job title, duration, and 2-3 strong, quantifiable bullet points formatted with standard LaTeX list tags.
-     4. Make sure the LaTeX code compiles cleanly with valid syntax and no missing brackets or broken packages.
-     5. Never invent fake personal contact details.`;
+     4. Support multi-page resumes (1 page, 2 pages, and up to 5 pages) based on content depth. When the user adds extensive experience, projects, certifications, or detailed bullets, let the resume expand naturally into 2, 3, 4, or up to 5 pages. Do not arbitrarily compress or drop details to force a single page unless the user explicitly requests a 1-page compact layout. You may insert \\newpage between major sections when appropriate for clean page transitions.
+     5. Make sure the LaTeX code compiles cleanly with valid syntax and no missing brackets or broken packages.
+     6. Never invent fake personal contact details.`;
 
     const payload = {
       contents: [{ parts: [{ text: systemPrompt }] }],

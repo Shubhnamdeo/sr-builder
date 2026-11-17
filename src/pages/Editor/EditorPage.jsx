@@ -499,6 +499,9 @@ function compileLatexToPaginatedPdf(code) {
   body = body.replace(/\\today/g, new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
   body = body.replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?\{([^}]*)\}/g, '$1');
 
+  // Handle explicit page breaks: \newpage, \pagebreak, \clearpage
+  body = body.replace(/\\(?:newpage|pagebreak|clearpage)\b/g, '<div class="latex-page-break"></div>');
+
   // Split into structural section blocks
   const sectionBlocks = body.split(/(?=<h2\b)/g).filter(b => b.trim());
 
@@ -517,31 +520,73 @@ function compileLatexToPaginatedPdf(code) {
   return paginateBlocks(sectionBlocks, isResumeStyle);
 }
 
-// True A4 single-page preservation matching Overleaf standard resume output
-function paginateBlocks(blocks, isResumeStyle = false) {
-  // If it's a resume and total block count is standard (<= 8 sections), it's designed for 1 PAGE!
-  if (isResumeStyle && blocks.length <= 8) {
-    const totalContent = blocks.join('\n');
-    // Count items and lines to verify it fits on 1 page
-    const liCount = (totalContent.match(/<li\b/g) || []).length;
-    const lineCount = totalContent.split('\n').length;
-    // Standard 1-page resumes have up to ~25 bullet items and fits standard A4 printable height
-    if (liCount <= 26 && lineCount <= 120) {
-      return [totalContent];
+// A4 multi-page pagination supporting 1 to 5+ pages dynamically
+function paginateBlocks(rawBlocks, isResumeStyle = false) {
+  // 1. Decompose blocks that contain explicit page breaks (\newpage)
+  const blocks = [];
+  for (const b of rawBlocks) {
+    if (b.includes('latex-page-break')) {
+      const parts = b.split(/<div class="latex-page-break"><\/div>/);
+      parts.forEach((p, idx) => {
+        if (p.trim()) blocks.push(p.trim());
+        if (idx < parts.length - 1) {
+          blocks.push('__FORCED_PAGE_BREAK__');
+        }
+      });
+    } else {
+      blocks.push(b);
     }
   }
 
+  // 2. Decompose oversized section blocks into atomic items so multi-page flow across 2-5 pages is seamless
+  const atomicBlocks = [];
+  for (const b of blocks) {
+    if (b === '__FORCED_PAGE_BREAK__') {
+      atomicBlocks.push(b);
+      continue;
+    }
+    const estimated = estimateCompactBlockHeight(b);
+    // If a section is large (> 480px) and contains multiple items or lists, break into atomic pieces
+    if (estimated > 480 && (b.includes('latex-line-split') || b.includes('latex-list') || b.includes('latex-nobullet-item'))) {
+      const h2Match = b.match(/^(<h2[\s\S]*?<\/h2>)([\s\S]*)$/);
+      if (h2Match) {
+        atomicBlocks.push(h2Match[1]);
+        const subItems = h2Match[2].split(/(?=<div class="latex-line-split"|<ul class="latex-list"|<div class="latex-nobullet-item")/g).filter(s => s.trim());
+        if (subItems.length > 1) {
+          subItems.forEach(sub => atomicBlocks.push(sub));
+          continue;
+        }
+      }
+    }
+    atomicBlocks.push(b);
+  }
+
+  // 3. If there is NO forced page break and total content fits comfortably on 1 page (~980px), keep it single-page!
+  const hasForcedBreak = atomicBlocks.includes('__FORCED_PAGE_BREAK__');
+  const totalEstimated = atomicBlocks.reduce((acc, b) => b === '__FORCED_PAGE_BREAK__' ? acc + 1000 : acc + estimateCompactBlockHeight(b), 0);
+  
+  if (!hasForcedBreak && totalEstimated <= 980) {
+    return [atomicBlocks.join('\n')];
+  }
+
+  // 4. Multi-page pagination (dynamically renders 2 pages, 3 pages, up to 5+ pages)
   const pages = [];
   let currentPageBlocks = [];
   let currentEstimatedHeight = 0;
-  
-  // Real A4 printable height with compact LaTeX resume margins
-  // A4 = 297mm @ 96DPI = 1123px. With 30px top/bottom margins, printable area is ~1060px.
-  const A4_PAGE_CAPACITY = 1060;
+  const A4_PAGE_CAPACITY = 990;
 
-  for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i].trim();
+  for (let i = 0; i < atomicBlocks.length; i++) {
+    const block = atomicBlocks[i].trim();
     if (!block) continue;
+
+    if (block === '__FORCED_PAGE_BREAK__') {
+      if (currentPageBlocks.length > 0) {
+        pages.push(currentPageBlocks.join('\n'));
+        currentPageBlocks = [];
+        currentEstimatedHeight = 0;
+      }
+      continue;
+    }
 
     const blockHeight = estimateCompactBlockHeight(block);
 
