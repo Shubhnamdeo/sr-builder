@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import { api } from '../../services/api';
 import './PdfPreview.css';
 
 function PdfPreview({
@@ -11,7 +10,6 @@ function PdfPreview({
   error,
   onRecompile,
   onTextClick,
-  onApplySnippet,
   content,
   layout,
   onLayoutChange,
@@ -19,7 +17,6 @@ function PdfPreview({
   const [zoom, setZoom] = useState(74); // 74% matching Image 2
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInputVal, setPageInputVal] = useState('1');
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [showRecompileDropdown, setShowRecompileDropdown] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [autoCompile, setAutoCompile] = useState(true);
@@ -28,44 +25,29 @@ function PdfPreview({
   // Zen / Presentation Mode state
   const [isZenMode, setIsZenMode] = useState(false);
 
-  // Interactive "✨ AI Polish" Floating Pill state
-  const [floatingPill, setFloatingPill] = useState({
-    visible: false,
-    x: 0,
-    y: 0,
-    snippet: '',
-    improvedSnippet: '',
-    isPolishing: false,
-    error: null,
-    customPrompt: '',
-    activeAction: '',
-  });
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
-
   const scrollContainerRef = useRef(null);
 
-  // Keyboard shortcut listener for Esc (closes Zen mode and Floating Pill)
+  // Keyboard shortcut listener for Esc (closes Zen mode)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        if (floatingPill.visible) {
-          setFloatingPill(prev => ({ ...prev, visible: false }));
-        }
-        if (isZenMode) {
-          setIsZenMode(false);
-        }
+      if (e.key === 'Escape' && isZenMode) {
+        setIsZenMode(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isZenMode, floatingPill.visible]);
+  }, [isZenMode]);
 
-  // SyncTeX & "✨ AI Polish" trigger: click text in PDF to position floating AI pill
+  // SyncTeX: click any text in the rendered PDF to jump cursor to exact code
   const handlePdfContentClick = useCallback((e) => {
-    // If click originated inside the floating pill, do nothing
-    if (e.target.closest('.ai-polish-floating-pill')) return;
+    if (!onTextClick) return;
 
     const selection = window.getSelection()?.toString()?.trim();
+    if (selection && selection.length > 1) {
+      onTextClick(selection);
+      return;
+    }
+
     const target = e.target;
     if (!target) return;
 
@@ -74,75 +56,16 @@ function PdfPreview({
       target.classList.contains('multi-page-container') ||
       target.classList.contains('pdf-page-number-footer')
     ) {
-      setFloatingPill(prev => ({ ...prev, visible: false }));
       return;
     }
 
-    const textEl = target.closest('li, p, .latex-line-split, .table-single-line, h1, h2, h3, .latex-header-name');
-    const fullText = selection && selection.length > 2 ? selection : (textEl?.innerText?.trim() || target.innerText?.trim());
+    const textEl = target.closest('h1, h2, h3, h4, h5, p, li, td, th, span, div, a');
+    const text = textEl?.innerText?.trim() || target.innerText?.trim();
 
-    if (fullText && fullText.length > 3) {
-      if (onTextClick) {
-        onTextClick(fullText);
-      }
-
-      // Compute coordinate for the floating pill
-      const targetRect = textEl ? textEl.getBoundingClientRect() : target.getBoundingClientRect();
-      const pillWidth = 360;
-      let left = targetRect.left + (targetRect.width / 2) - (pillWidth / 2);
-      left = Math.max(16, Math.min(window.innerWidth - pillWidth - 20, left));
-      let top = targetRect.top - 62;
-      if (top < 60) {
-        top = targetRect.bottom + 12;
-      }
-
-      setFloatingPill({
-        visible: true,
-        x: left,
-        y: top,
-        snippet: fullText.replace(/^[–\-\*\•\s]+/, '').trim(),
-        improvedSnippet: '',
-        isPolishing: false,
-        error: null,
-        customPrompt: '',
-        activeAction: '',
-      });
-    } else {
-      setFloatingPill(prev => ({ ...prev, visible: false }));
+    if (text) {
+      onTextClick(text);
     }
   }, [onTextClick]);
-
-  // Execute AI Polish action via backend Gemini endpoint
-  const handleExecutePolish = async (instruction, actionName = '') => {
-    if (!floatingPill.snippet || floatingPill.isPolishing) return;
-    setFloatingPill(prev => ({ ...prev, isPolishing: true, error: null, activeAction: actionName }));
-
-    try {
-      const res = await api.ai.polish(floatingPill.snippet, instruction, content);
-      setFloatingPill(prev => ({
-        ...prev,
-        isPolishing: false,
-        improvedSnippet: res.improvedSnippet || prev.snippet,
-      }));
-    } catch (err) {
-      console.error('Polish snippet error:', err);
-      setFloatingPill(prev => ({
-        ...prev,
-        isPolishing: false,
-        error: 'Unable to reach AI service. Please retry.',
-      }));
-    }
-  };
-
-  // Accept polished snippet and apply directly into resume code
-  const handleAcceptPolish = () => {
-    if (onApplySnippet && floatingPill.improvedSnippet) {
-      onApplySnippet(floatingPill.snippet, floatingPill.improvedSnippet);
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 2400);
-    }
-    setFloatingPill(prev => ({ ...prev, visible: false }));
-  };
 
   const totalPages = Math.max(1, pages.length);
   const scale = zoom / 100;
@@ -372,7 +295,7 @@ function PdfPreview({
   }, [content]);
 
   return (
-    <div className={`overleaf-preview-container ${isDarkMode ? 'preview-dark' : ''} ${isZenMode ? 'zen-presentation-mode' : ''}`}>
+    <div className={`overleaf-preview-container ${isZenMode ? 'zen-presentation-mode' : ''}`}>
       {/* Top Preview Bar matching Image 2 */}
       <div className="preview-top-toolbar">
         {/* Left group */}
@@ -505,17 +428,6 @@ function PdfPreview({
 
         {/* Right controls matching Image 2 */}
         <div className="toolbar-controls-group">
-          {/* Dark / Light preview toggle */}
-          <button
-            className="preview-tool-btn"
-            title="Toggle background dark mode"
-            onClick={() => setIsDarkMode(!isDarkMode)}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-            </svg>
-          </button>
-
           {/* Up arrow */}
           <button
             className="preview-nav-chevron"
@@ -592,7 +504,6 @@ function PdfPreview({
       {isZenMode && (
         <div className="zen-floating-top-bar">
           <div className="zen-brand-tag">
-            <span className="zen-sparkle">✨</span>
             <span className="zen-title">Zen Presentation Mode</span>
           </div>
           <div className="zen-controls-group">
@@ -680,149 +591,6 @@ function PdfPreview({
           </div>
         )}
       </div>
-
-      {/* Interactive "✨ AI Polish" Floating Pill (SyncTeX Context Action) */}
-      {floatingPill.visible && (
-        <div
-          className="ai-polish-floating-pill"
-          style={{
-            position: 'fixed',
-            left: `${floatingPill.x}px`,
-            top: `${floatingPill.y}px`,
-            zIndex: 10050,
-          }}
-        >
-          <div className="polish-pill-header">
-            <div className="polish-pill-title-wrap">
-              <span className="polish-sparkle-icon">✨</span>
-              <span className="polish-title-text">AI Polish</span>
-              <span className="polish-model-badge">Gemini 2.5</span>
-            </div>
-            <button
-              className="polish-close-btn"
-              onClick={() => setFloatingPill(prev => ({ ...prev, visible: false }))}
-              title="Close (Esc)"
-            >
-              ×
-            </button>
-          </div>
-
-          <div className="polish-snippet-quote" title={floatingPill.snippet}>
-            "{floatingPill.snippet.slice(0, 85)}{floatingPill.snippet.length > 85 ? '...' : ''}"
-          </div>
-
-          {floatingPill.isPolishing ? (
-            <div className="polish-loading-state">
-              <div className="polish-spinner"></div>
-              <span>Polishing line with AI...</span>
-              <button
-                type="button"
-                className="polish-cancel-btn"
-                onClick={() => setFloatingPill(prev => ({ ...prev, isPolishing: false }))}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : floatingPill.improvedSnippet ? (
-            <div className="polish-result-state">
-              <div className="polish-result-label">Improved Revision:</div>
-              <div className="polish-result-box">
-                {floatingPill.improvedSnippet}
-              </div>
-              <div className="polish-actions-row">
-                <button
-                  type="button"
-                  className="polish-accept-btn"
-                  onClick={handleAcceptPolish}
-                >
-                  ✓ Accept & Apply
-                </button>
-                <button
-                  type="button"
-                  className="polish-retry-btn"
-                  onClick={() => handleExecutePolish(floatingPill.activeAction || 'Make punchier with strong metrics', floatingPill.activeAction)}
-                >
-                  ↺ Retry
-                </button>
-                <button
-                  type="button"
-                  className="polish-discard-btn"
-                  onClick={() => setFloatingPill(prev => ({ ...prev, improvedSnippet: '' }))}
-                >
-                  Back
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="polish-presets-state">
-              <div className="polish-chips-row">
-                <button
-                  type="button"
-                  className="polish-chip-btn"
-                  onClick={() => handleExecutePolish('Add realistic, impressive quantifiable metrics, percentages, numbers and business impact to this bullet point', 'Add metrics')}
-                  title="Enhance with numbers, % growth, latency reduction, scale"
-                >
-                  📈 Add metrics
-                </button>
-                <button
-                  type="button"
-                  className="polish-chip-btn"
-                  onClick={() => handleExecutePolish('Make this bullet point punchier, more concise, and start with a powerful FAANG executive action verb', 'Make punchier')}
-                  title="Use strong verbs like Architected, Spearheaded, Optimized"
-                >
-                  ⚡ Make punchier
-                </button>
-                <button
-                  type="button"
-                  className="polish-chip-btn"
-                  onClick={() => handleExecutePolish('Fix grammar, spelling, flow, and elevate professional executive tone', 'Fix grammar')}
-                  title="Flawless professional English"
-                >
-                  ✍️ Fix grammar
-                </button>
-              </div>
-
-              {/* Custom instruction input */}
-              <form
-                className="polish-custom-input-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (floatingPill.customPrompt.trim()) {
-                    handleExecutePolish(floatingPill.customPrompt.trim(), 'Custom');
-                  }
-                }}
-              >
-                <input
-                  type="text"
-                  className="polish-custom-input"
-                  placeholder="Custom instruction (e.g. tailor for lead role)..."
-                  value={floatingPill.customPrompt}
-                  onChange={(e) => setFloatingPill(prev => ({ ...prev, customPrompt: e.target.value }))}
-                />
-                <button
-                  type="submit"
-                  className="polish-custom-submit-btn"
-                  disabled={!floatingPill.customPrompt.trim()}
-                >
-                  Polish
-                </button>
-              </form>
-            </div>
-          )}
-
-          {floatingPill.error && (
-            <div className="polish-error-msg">{floatingPill.error}</div>
-          )}
-        </div>
-      )}
-
-      {/* Polish Applied Success Toast */}
-      {showSuccessToast && (
-        <div className="polish-success-toast">
-          <span className="toast-sparkle">✨</span>
-          <span>Revised line successfully applied to resume!</span>
-        </div>
-      )}
     </div>
   );
 }
