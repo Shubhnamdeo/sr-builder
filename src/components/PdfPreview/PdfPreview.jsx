@@ -177,6 +177,39 @@ function PdfPreview({
           }
         });
 
+        // Collect Document Outline / Bookmarks for this page (shows in Chrome PDF sidebar!)
+        const sectionEls = pageEl.querySelectorAll('.latex-section');
+        const outlineItems = [];
+        sectionEls.forEach(secEl => {
+          const title = secEl.innerText.replace(/^\d+(\.\d+)?\s*/, '').trim();
+          if (title) {
+            outlineItems.push(title);
+          }
+        });
+
+        // Collect searchable text layer items for ATS & browser text-selection
+        const textLayerItems = [];
+        const walker = document.createTreeWalker(pageEl, NodeFilter.SHOW_TEXT, null, false);
+        let textNode;
+        while ((textNode = walker.nextNode())) {
+          const rawText = textNode.nodeValue?.trim();
+          if (!rawText) continue;
+          const parent = textNode.parentElement;
+          if (!parent || parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE') continue;
+
+          const range = document.createRange();
+          range.selectNodeContents(textNode);
+          const rects = range.getClientRects();
+          if (rects.length > 0) {
+            const r = rects[0];
+            const x = (r.left - pageRect.left) * scaleX;
+            const y = (r.top - pageRect.top) * scaleY + (r.height * scaleY * 0.82);
+            const parentStyle = window.getComputedStyle(parent);
+            const fontSizePt = Math.max(6, Math.min(22, (parseFloat(parentStyle.fontSize) || 12) * 0.75));
+            textLayerItems.push({ text: rawText, x, y, fontSize: fontSizePt });
+          }
+        }
+
         const canvas = await html2canvas(pageEl, {
           scale: 2.5, // 2.5x retina resolution for razor-sharp vector-like typography
           useCORS: true,
@@ -198,11 +231,36 @@ function PdfPreview({
         // Standard A4 physical dimensions in mm: 210 x 297
         pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
 
+        // Add Document Outline Bookmarks (so Chrome displays the document structure sidebar)
+        if (pdf.outline && pdf.outline.add) {
+          outlineItems.forEach(title => {
+            try {
+              pdf.outline.add(null, title, { pageNumber: i + 1 });
+            } catch (e) {}
+          });
+        }
+
         // Embed clickable hyperlink annotations on top of the page canvas
         linkBoxes.forEach(({ x, y, w, h, url }) => {
           pdf.link(x, y, w, h, { url });
         });
+
+        // Embed searchable text layer for full text selection and ATS reading
+        textLayerItems.forEach(({ text, x, y, fontSize }) => {
+          try {
+            pdf.setFontSize(fontSize);
+            pdf.text(text, x, y, { renderingMode: 'invisible' });
+          } catch (e) {}
+        });
       }
+
+      pdf.setProperties({
+        title: 'Resume',
+        subject: 'Curriculum Vitae',
+        author: 'Candidate',
+        keywords: 'Resume, CV, LaTeX',
+        creator: 'SR Builder (LaTeX Studio)',
+      });
 
       pdf.save('S-resume.pdf');
     } catch (err) {
@@ -327,7 +385,7 @@ function PdfPreview({
           {/* Download PDF button (tray with down arrow) */}
           <button
             className={`preview-tool-btn ${isGeneratingPdf ? 'generating-pdf' : ''}`}
-            title={isGeneratingPdf ? "Generating PDF..." : "Download PDF (S-resume.pdf)"}
+            title={isGeneratingPdf ? "Generating PDF..." : "Download PDF (S-resume.pdf with Bookmarks & Text Layer)"}
             onClick={handleDownloadPdf}
             disabled={isGeneratingPdf}
           >
@@ -340,6 +398,19 @@ function PdfPreview({
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
             )}
+          </button>
+
+          {/* Native Vector Print / PDF button */}
+          <button
+            className="preview-tool-btn"
+            title="Print or Save as Native Vector PDF (Ctrl+P)"
+            onClick={() => window.print()}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
           </button>
         </div>
 
