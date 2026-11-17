@@ -12,6 +12,73 @@ function getGeminiApiKey() {
 // Utility: sleep for ms
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Reusable Gemini Model Cascade with 5-second backoff on high demand
+async function callGeminiModels(systemPrompt, apiKey, maxTokens = 8192, temperature = 0.3) {
+  const payload = {
+    contents: [{ parts: [{ text: systemPrompt }] }],
+    generationConfig: {
+      temperature,
+      maxOutputTokens: maxTokens,
+    },
+  };
+
+  const candidateModels = [
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
+    'gemma-4-26b-a4b-it',
+  ];
+
+  let rawText = '';
+  let usedModel = '';
+  const maxRetriesPerModel = 2;
+
+  for (const model of candidateModels) {
+    for (let attempt = 0; attempt <= maxRetriesPerModel; attempt++) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const parts = data.candidates?.[0]?.content?.parts || [];
+          rawText = parts.map(p => p.text || '').join('');
+          if (rawText) {
+            usedModel = model;
+            break;
+          }
+        }
+
+        if (response.status === 503 || response.status === 429) {
+          console.log(`[AI] ${model} returned ${response.status} (high demand/spike). Waiting 5 seconds before retry...`);
+          if (attempt < maxRetriesPerModel) {
+            await sleep(5000);
+            continue;
+          }
+        }
+
+        if (response.status === 404) {
+          break;
+        }
+      } catch (err) {
+        console.warn(`[AI] Model ${model} attempt ${attempt} error:`, err.message);
+        if (attempt < maxRetriesPerModel) {
+          await sleep(5000);
+        }
+      }
+    }
+
+    if (rawText) break;
+  }
+
+  return { rawText, usedModel };
+}
+
 // Conversational AI Resume Assistant Endpoint
 router.post('/chat', async (req, res) => {
   try {
@@ -66,70 +133,7 @@ YOUR BEHAVIOR GUIDELINES:
      5. Make sure the LaTeX code compiles cleanly with valid syntax and no missing brackets or broken packages.
      6. Never invent fake personal contact details.`;
 
-    const payload = {
-      contents: [{ parts: [{ text: systemPrompt }] }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 8192,
-      },
-    };
-
-    // Candidates in order of speed, reliability, and capability
-    const candidateModels = [
-      'gemini-3.5-flash-lite',
-      'gemini-3.1-flash-lite',
-      'gemini-3.8-flash',
-      'gemini-3.5-flash',
-      'gemma-4-26b-a4b-it',
-    ];
-
-    let rawText = '';
-    let usedModel = '';
-    const maxRetriesPerModel = 2;
-
-    for (const model of candidateModels) {
-      for (let attempt = 0; attempt <= maxRetriesPerModel; attempt++) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const parts = data.candidates?.[0]?.content?.parts || [];
-            rawText = parts.map(p => p.text || '').join('');
-            if (rawText) {
-              usedModel = model;
-              break;
-            }
-          }
-
-          // If high demand (503) or rate limit (429), wait 5 seconds before retrying as requested
-          if (response.status === 503 || response.status === 429) {
-            console.log(`[AI Chat] ${model} returned ${response.status} (high demand/spike). Waiting 5 seconds before retry...`);
-            if (attempt < maxRetriesPerModel) {
-              await sleep(5000);
-              continue;
-            }
-          }
-
-          // If 404 or unsupported, break inner loop to try next model immediately
-          if (response.status === 404) {
-            break;
-          }
-        } catch (err) {
-          console.warn(`[AI Chat] Model ${model} attempt ${attempt} error:`, err.message);
-          if (attempt < maxRetriesPerModel) {
-            await sleep(5000);
-          }
-        }
-      }
-
-      if (rawText) break;
-    }
+    const { rawText, usedModel } = await callGeminiModels(systemPrompt, apiKey, 8192, 0.3);
 
     if (!rawText) {
       return res.status(502).json({ error: 'Failed to generate response from AI models.' });
@@ -160,6 +164,58 @@ YOUR BEHAVIOR GUIDELINES:
   } catch (err) {
     console.error('AI chat endpoint error:', err);
     res.status(500).json({ error: 'Internal server error while processing AI request.' });
+  }
+});
+
+// Inline "✨ AI Polish" Snippet Endpoint (Instant inline improvements from PDF SyncTeX)
+router.post('/polish', async (req, res) => {
+  try {
+    const { snippet = '', instruction = 'Add strong metrics and make punchier', currentCode = '' } = req.body;
+    const apiKey = getGeminiApiKey();
+
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Gemini API key is not configured on the server.' });
+    }
+
+    if (!snippet.trim()) {
+      return res.status(400).json({ error: 'Snippet text is required.' });
+    }
+
+    const systemPrompt = `You are an elite Executive Resume Editor and FAANG Career Coach.
+You are rewriting a single line or bullet point from a resume.
+
+ORIGINAL SNIPPET:
+"""
+${snippet}
+"""
+
+REWRITE INSTRUCTION:
+"${instruction}"
+
+RULES:
+1. Return ONLY the polished, impactful replacement sentence or bullet text.
+2. Do NOT prefix with bullet characters (like -, *, •, or \\item). Just the clean sentence.
+3. If the instruction asks for metrics, weave in realistic, impressive quantifiable impact (e.g. 'reduced latency by 35%', 'automated 15+ weekly reporting pipelines', 'serving 1,200+ active users').
+4. If the instruction asks for punchier action verbs, start with strong verbs like 'Architected', 'Spearheaded', 'Engineered', 'Optimized', 'Streamlined'.
+5. If the original text had LaTeX commands like \\textbf{...} or \\href{...}{...}, preserve appropriate LaTeX inline styling.
+6. ABSOLUTELY NO MARKDOWN CODE BLOCKS (\`\`\`), NO CONVERSATIONAL FILLER, NO QUOTATION MARKS. Output ONLY the polished text string.`;
+
+    const { rawText, usedModel } = await callGeminiModels(systemPrompt, apiKey, 512, 0.2);
+
+    const cleanedText = rawText
+      .replace(/^```[a-z]*\s*/i, '')
+      .replace(/\s*```$/, '')
+      .replace(/^["']|["']$/g, '')
+      .trim();
+
+    res.json({
+      originalSnippet: snippet,
+      improvedSnippet: cleanedText || snippet,
+      model: usedModel,
+    });
+  } catch (err) {
+    console.error('AI polish snippet endpoint error:', err);
+    res.status(500).json({ error: 'Failed to polish snippet.' });
   }
 });
 

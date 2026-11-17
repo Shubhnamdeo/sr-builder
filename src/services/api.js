@@ -105,5 +105,12 @@ export const api = {
         body: JSON.stringify({ messages, currentCode, userInstruction }),
         ...options,
       }),
+
+    polish: (snippet, instruction, currentCode, options = {}) =>
+      request('/ai/polish', {
+        method: 'POST',
+        body: JSON.stringify({ snippet, instruction, currentCode }),
+        ...options,
+      }),
   },
 };

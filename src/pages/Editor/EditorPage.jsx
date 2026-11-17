@@ -92,6 +92,46 @@ function EditorPage() {
     }
   }, [layout]);
 
+  // Inline "✨ AI Polish": Apply revised snippet directly into LaTeX code
+  const handleApplySnippet = useCallback((originalSnippet, improvedSnippet) => {
+    if (!originalSnippet || !improvedSnippet) return;
+
+    const cleanOrig = originalSnippet.replace(/^[–\-\*\•\s]+/, '').trim();
+    const cleanImpr = improvedSnippet.replace(/^[–\-\*\•\s]+/, '').trim();
+    if (!cleanOrig || !cleanImpr) return;
+
+    let updatedCode = content;
+
+    // 1. Exact string match
+    if (updatedCode.includes(cleanOrig)) {
+      updatedCode = updatedCode.replace(cleanOrig, cleanImpr);
+    } else {
+      // 2. Line match with \item or \resumeItem preserving
+      const sample = cleanOrig.slice(0, Math.min(25, cleanOrig.length));
+      const lines = updatedCode.split('\n');
+      const idx = lines.findIndex(l => l.includes(sample));
+
+      if (idx !== -1) {
+        const itemMatch = lines[idx].match(/^(\s*\\(?:item|resumeItem)\s*\{?)/);
+        const hasClosingBrace = itemMatch && itemMatch[1].includes('{') && lines[idx].endsWith('}');
+        if (itemMatch) {
+          lines[idx] = `${itemMatch[1]}${cleanImpr}${hasClosingBrace ? '}' : ''}`;
+        } else {
+          lines[idx] = cleanImpr;
+        }
+        updatedCode = lines.join('\n');
+      } else {
+        // 3. Fallback: replace using first words
+        const words = cleanOrig.split(/\s+/).slice(0, 4).join('.*?');
+        const reg = new RegExp(words, 'i');
+        updatedCode = updatedCode.replace(reg, cleanImpr);
+      }
+    }
+
+    handleContentChange(updatedCode);
+    compileToPdf(updatedCode);
+  }, [content, handleContentChange, compileToPdf]);
+
   // Split view drag
   const handleMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -273,6 +313,7 @@ function EditorPage() {
                 error={compileError}
                 onRecompile={handleRecompile}
                 onTextClick={handlePdfTextClick}
+                onApplySnippet={handleApplySnippet}
                 content={content}
                 layout={layout}
                 onLayoutChange={setLayout}
