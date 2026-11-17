@@ -39,7 +39,7 @@ router.post('/register', async (req, res) => {
       name: name.trim(),
       email: cleanEmail,
       passwordHash,
-      role: cleanEmail === 'shubhnamdeo@gmail.com' ? 'admin' : 'user',
+      role: cleanEmail === 'admin@example.com' ? 'admin' : 'user',
     });
 
     await user.save();
@@ -180,7 +180,7 @@ router.post('/google', async (req, res) => {
         email: cleanEmail,
         avatar: avatar || displayName.charAt(0).toUpperCase(),
         isGoogle: true,
-        role: cleanEmail === 'shubhnamdeo@gmail.com' ? 'admin' : 'user',
+        role: cleanEmail === 'admin@example.com' ? 'admin' : 'user',
       });
       await user.save();
 

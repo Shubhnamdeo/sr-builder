@@ -15,11 +15,11 @@ const TEST_USER = {
 };
 
 const DEFAULT_ADMIN_USER = {
-  id: 'usr_admin_shubh',
-  name: 'Shubh Namdeo',
-  email: 'shubhnamdeo@gmail.com',
-  userId: 'shubhnamdeo',
-  avatar: 'SN',
+  id: 'usr_admin',
+  name: 'Administrator',
+  email: 'admin@example.com',
+  userId: 'admin',
+  avatar: 'A',
   plan: 'free',
   role: 'admin',
 };
@@ -99,7 +99,7 @@ export function AuthProvider({ children }) {
       email: cleanId,
       password: password,
       avatar: cleanName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U',
-      role: cleanKey === 'shubhnamdeo@gmail.com' ? 'admin' : 'user',
+      role: cleanKey === 'admin' || cleanKey === 'admin@example.com' ? 'admin' : 'user',
       plan: 'free',
       createdAt: new Date().toISOString(),
     };
@@ -141,8 +141,8 @@ export function AuthProvider({ children }) {
     }
 
     // B. Check default admin account
-    if (cleanKey === 'shubhnamdeo@gmail.com' || cleanKey === 'shubhnamdeo') {
-      if (cleanPwd === 'password123' || cleanPwd === 'admin123' || cleanPwd === 'password' || !cleanPwd) {
+    if (cleanKey === 'admin' || cleanKey === 'admin@example.com') {
+      if (cleanPwd === 'admin123' || cleanPwd === 'admin' || cleanPwd === 'password' || !cleanPwd) {
         setUser(DEFAULT_ADMIN_USER);
         setIsAuthenticated(true);
         localStorage.setItem('sr_auth_user', JSON.stringify(DEFAULT_ADMIN_USER));
@@ -215,7 +215,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         isAuthenticated,
-        isAdmin: user?.role === 'admin' || user?.email === 'shubhnamdeo@gmail.com',
+        isAdmin: user?.role === 'admin',
         isBackendConnected,
         loginWithCredentials,
         signupWithCredentials,
@@ -223,7 +223,7 @@ export function AuthProvider({ children }) {
         loginWithEmail: loginWithCredentials,
         signupWithEmail: signupWithCredentials,
         logout,
-        defaultEmail: 'shubhnamdeo@gmail.com',
+        defaultEmail: 'user@example.com',
       }}
     >
       {children}

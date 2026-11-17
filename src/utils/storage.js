@@ -4,11 +4,11 @@ const GLOBAL_STORAGE_KEY = 'resume_builder_projects';
 export function getUserStorageKey(userEmail) {
   if (!userEmail) return GLOBAL_STORAGE_KEY;
   const clean = userEmail.trim().toLowerCase();
-  if (clean === 'shubhnamdeo@gmail.com') return GLOBAL_STORAGE_KEY;
+  if (clean === 'admin' || clean === 'admin@example.com') return GLOBAL_STORAGE_KEY;
   return `resume_builder_projects_${clean.replace(/[^a-z0-9]/g, '_')}`;
 }
 
-export const SALESFORCE_RESUME_SHUBH = `\\documentclass[letterpaper,9pt]{article}
+export const DEFAULT_STARTER_RESUME = `\\documentclass[letterpaper,9pt]{article}
 
 \\usepackage[empty]{fullpage}
 \\usepackage{titlesec}
@@ -42,11 +42,11 @@ export const SALESFORCE_RESUME_SHUBH = `\\documentclass[letterpaper,9pt]{article
 
 %----------HEADER-----------------
 \\begin{center}
-    \\textbf{\\Large \\scshape Shubh Namdeo} \\\\ \\vspace{2pt}
-    Mumbai, Maharashtra 400069 $|$ +91 7000312723 $|$ \\href{mailto:shubhnamdeo15@gmail.com}{\\underline{shubhnamdeo15@gmail.com}} \\\\ \\vspace{2pt}
-    \\href{https://trailblazer.me/id/shubhnamdeo}{\\textbf{\\underline{Trailhead Profile}}} $|$
-    \\href{https://linkedin.com/in/shubh-namdeo-8a9902186}{\\underline{LinkedIn}} $|$
-    \\href{https://github.com/Shubhnamdeo}{\\underline{GitHub}}
+    \\textbf{\\Large \\scshape Candidate Name} \\\\ \\vspace{2pt}
+    City, State 00000 $|$ +1 (555) 000-0000 $|$ \\href{mailto:user@example.com}{\\underline{user@example.com}} \\\\ \\vspace{2pt}
+    \\href{https://linkedin.com/in/yourprofile}{\\underline{LinkedIn}} $|$
+    \\href{https://github.com/yourusername}{\\underline{GitHub}} $|$
+    \\href{https://yourportfolio.com}{\\underline{Portfolio}}
 \\end{center}
 
 \\vspace{-8pt}
@@ -116,7 +116,7 @@ B.Tech Computer Science graduate (2026) and dedicated Salesforce Trailblazer spe
   \\begin{itemize}[leftmargin=0.15in, label={}, itemsep=-1pt]
     \\item
       \\begin{tabular*}{0.98\\textwidth}[t]{l@{\\extracolsep{\\fill}}r}
-        \\textbf{Events Hub (Salesforce Enterprise Platform)} $|$ \\href{https://github.com/Shubhnamdeo}{\\underline{GitHub}} & \\textit{Flow Builder, FLS, Role Hierarchy} \\\\
+        \\textbf{Events Hub (Salesforce Enterprise Platform)} $|$ \\href{https://github.com/yourusername}{\\underline{GitHub}} & \\textit{Flow Builder, FLS, Role Hierarchy} \\\\
       \\end{tabular*}
       \\vspace{-4pt}
       \\begin{itemize}[itemsep=0pt, parsep=0pt]
@@ -141,7 +141,7 @@ B.Tech Computer Science graduate (2026) and dedicated Salesforce Trailblazer spe
 \\end{document}`;
 
 export function createInitialUserResume(userEmail = 'user@example.com', userName = 'Candidate') {
-  const cleanName = userName || userEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  const cleanName = userName || (userEmail.includes('@') ? userEmail.split('@')[0] : userEmail).replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   return {
     id: 'my-resume-' + Date.now().toString(36),
     title: `${cleanName}'s Resume`,
@@ -150,24 +150,24 @@ export function createInitialUserResume(userEmail = 'user@example.com', userName
     lastModified: new Date().toISOString(),
     archived: false,
     trashed: false,
-    content: SALESFORCE_RESUME_SHUBH.replace('Shubh Namdeo', cleanName).replace('shubhnamdeo15@gmail.com', userEmail),
+    content: DEFAULT_STARTER_RESUME.replace('Candidate Name', cleanName).replace('user@example.com', userEmail),
   };
 }
 
 const INITIAL_PROJECTS = [
   {
-    id: 's-resume',
-    title: 'S- resume',
+    id: 'sample-resume-1',
+    title: 'Software Engineer Resume',
     owner: 'You',
     createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
     lastModified: new Date().toISOString(),
     archived: false,
     trashed: false,
-    content: SALESFORCE_RESUME_SHUBH,
+    content: DEFAULT_STARTER_RESUME,
   },
   {
-    id: 'jp-shubh',
-    title: 'JP-SHUBH',
+    id: 'sample-article-2',
+    title: 'Research Paper Draft',
     owner: 'You',
     createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     lastModified: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
@@ -176,9 +176,9 @@ const INITIAL_PROJECTS = [
     content: `\\documentclass{article}
 \\usepackage{graphicx}
 
-\\title{JP-SHUBH}
-\\author{Shubh Namdeo}
-\\date{November 2026}
+\\title{Research Paper Draft}
+\\author{Your Name}
+\\date{${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}}
 
 \\begin{document}
 
@@ -189,24 +189,24 @@ const INITIAL_PROJECTS = [
 \\end{document}`,
   },
   {
-    id: 'namdeo-shubh-resume-nov-micro',
-    title: 'Namdeo-shubh-resume-nov-micro',
+    id: 'sample-resume-3',
+    title: 'Technical Resume',
     owner: 'You',
     createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
     lastModified: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
     archived: false,
     trashed: false,
-    content: SALESFORCE_RESUME_SHUBH,
+    content: DEFAULT_STARTER_RESUME,
   },
   {
-    id: 'namdeo-shubh-resume-22-10-26',
-    title: 'Namdeo-shubh-resume-22-10-26',
+    id: 'sample-resume-4',
+    title: 'Academic CV',
     owner: 'You',
     createdAt: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString(),
     lastModified: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString(),
     archived: false,
     trashed: false,
-    content: SALESFORCE_RESUME_SHUBH,
+    content: DEFAULT_STARTER_RESUME,
   },
 ];
 
@@ -218,7 +218,7 @@ export function loadProjects(userEmail = null) {
     }
     const data = localStorage.getItem(key);
     if (!data) {
-      if (!userEmail || userEmail.toLowerCase() === 'shubhnamdeo@gmail.com') {
+      if (!userEmail || userEmail.toLowerCase() === 'admin' || userEmail.toLowerCase() === 'admin@example.com') {
         localStorage.setItem(key, JSON.stringify(INITIAL_PROJECTS));
         return INITIAL_PROJECTS;
       }
@@ -251,8 +251,8 @@ export function getProject(id, userEmail = null) {
   if (found) return found;
 
   // Fallback to global projects if not found in current user's partitioned storage
-  if (userEmail && userEmail !== 'shubhnamdeo@gmail.com') {
-    const globalProjects = loadProjects('shubhnamdeo@gmail.com');
+  if (userEmail && userEmail !== 'admin' && userEmail !== 'admin@example.com') {
+    const globalProjects = loadProjects('admin@example.com');
     return globalProjects.find(p => p.id === id) || null;
   }
   return null;

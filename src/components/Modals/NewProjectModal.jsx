@@ -20,7 +20,7 @@ function NewProjectModal({ onClose }) {
     // Starts completely empty as requested!
     let initialContent = '';
     if (startType === 'blank_article') {
-      initialContent = `\\documentclass{article}\n\\usepackage{graphicx}\n\n\\title{${name}}\n\\author{Shubh Namdeo}\n\\date{\\today}\n\n\\begin{document}\n\n\\maketitle\n\n\\section{Introduction}\n\n\\end{document}`;
+      initialContent = `\\documentclass{article}\n\\usepackage{graphicx}\n\n\\title{${name}}\n\\author{Your Name}\n\\date{\\today}\n\n\\begin{document}\n\n\\maketitle\n\n\\section{Introduction}\n\n\\end{document}`;
     }
 
     try {
