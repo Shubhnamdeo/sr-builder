@@ -368,7 +368,7 @@ export default function LoginPage({ defaultMode = 'login' }) {
                 <input
                   type="text"
                   className="auth-text-input"
-                  placeholder="User ID or Email (e.g. test 1)"
+                  placeholder="User ID or Email"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
                   required
@@ -417,9 +417,6 @@ export default function LoginPage({ defaultMode = 'login' }) {
                     />
                     <span>Remember me</span>
                   </label>
-                  <span style={{ fontSize: '12px', color: '#64748b' }}>
-                    Default login: <strong>test 1</strong> / <strong>test 1</strong>
-                  </span>
                 </div>
               )}
 

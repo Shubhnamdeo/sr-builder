@@ -3,24 +3,14 @@ import { api } from '../services/api.js';
 
 const AuthContext = createContext(null);
 
-// Pre-seeded test account requested by user: "test 1" / "test 1"
-const TEST_USER = {
-  id: 'usr_test_1',
-  name: 'Test 1',
-  email: 'test 1',
-  userId: 'test 1',
-  avatar: 'T1',
-  plan: 'free',
-  role: 'user',
-};
-
-const DEFAULT_ADMIN_USER = {
-  id: 'usr_admin',
-  name: 'Administrator',
-  email: 'admin@example.com',
-  userId: 'admin',
-  avatar: 'A',
-  plan: 'free',
+// The Sole Administrator account: Shubh Namdeo
+const SHUBH_ADMIN_USER = {
+  id: 'usr_shubh_admin',
+  name: 'Shubh Namdeo',
+  email: 'shubh namdeo',
+  userId: 'shubh namdeo',
+  avatar: 'SN',
+  plan: 'pro',
   role: 'admin',
 };
 
@@ -92,6 +82,8 @@ export function AuthProvider({ children }) {
       throw new Error('An account with this User ID already exists. Please log in.');
     }
 
+    const isSoleAdmin = (cleanKey === 'shubh namdeo' || cleanKey === 'shubhnamdeo') && password === '#9pqhn9G8S';
+
     const newUser = {
       id: 'usr_' + Date.now(),
       name: cleanName,
@@ -99,8 +91,8 @@ export function AuthProvider({ children }) {
       email: cleanId,
       password: password,
       avatar: cleanName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U',
-      role: cleanKey === 'admin' || cleanKey === 'admin@example.com' ? 'admin' : 'user',
-      plan: 'free',
+      role: isSoleAdmin ? 'admin' : 'user',
+      plan: isSoleAdmin ? 'pro' : 'free',
       createdAt: new Date().toISOString(),
     };
 
@@ -131,24 +123,31 @@ export function AuthProvider({ children }) {
     const cleanKey = cleanId.toLowerCase();
     const cleanPwd = password ? password.trim() : '';
 
-    // A. Check requested pre-seeded account: "test 1" / "test 1"
-    if ((cleanKey === 'test 1' || cleanKey === 'test1') && (cleanPwd === 'test 1' || cleanPwd === 'test1')) {
-      setUser(TEST_USER);
-      setIsAuthenticated(true);
-      localStorage.setItem('sr_auth_user', JSON.stringify(TEST_USER));
-      localStorage.setItem('sr_logged_in', 'true');
-      return TEST_USER;
-    }
+    // A. Check Sole Administrator Account: "Shubh Namdeo" / "#9pqhn9G8S"
+    const isAdminId =
+      cleanKey === 'shubh namdeo' ||
+      cleanKey === 'shubhnamdeo' ||
+      cleanKey === 'shubhnamdeo@gmail.com';
 
-    // B. Check default admin account
-    if (cleanKey === 'admin' || cleanKey === 'admin@example.com') {
-      if (cleanPwd === 'admin123' || cleanPwd === 'admin' || cleanPwd === 'password' || !cleanPwd) {
-        setUser(DEFAULT_ADMIN_USER);
-        setIsAuthenticated(true);
-        localStorage.setItem('sr_auth_user', JSON.stringify(DEFAULT_ADMIN_USER));
-        localStorage.setItem('sr_logged_in', 'true');
-        return DEFAULT_ADMIN_USER;
+    if (isAdminId && cleanPwd === '#9pqhn9G8S') {
+      try {
+        const res = await api.auth.login(cleanKey, password);
+        if (res?.token && res?.user) {
+          localStorage.setItem('sr_auth_token', res.token);
+          localStorage.setItem('sr_auth_user', JSON.stringify(res.user));
+          localStorage.setItem('sr_logged_in', 'true');
+          setUser(res.user);
+          setIsAuthenticated(true);
+          return res.user;
+        }
+      } catch (e) {
+        console.warn('Backend login fallback to local session:', e.message);
       }
+      setUser(SHUBH_ADMIN_USER);
+      setIsAuthenticated(true);
+      localStorage.setItem('sr_auth_user', JSON.stringify(SHUBH_ADMIN_USER));
+      localStorage.setItem('sr_logged_in', 'true');
+      return SHUBH_ADMIN_USER;
     }
 
     // C. Try Backend API if online

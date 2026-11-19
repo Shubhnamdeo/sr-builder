@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 import './MenuBar.css';
 
 const INSERT_ITEMS = [
@@ -36,6 +37,7 @@ function MenuBar({
   const [activeMenu, setActiveMenu] = useState(null);
   const menuBarRef = useRef(null);
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
 
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -349,6 +351,17 @@ function MenuBar({
 
       {/* Right Section */}
       <div className="menubar-right-cluster">
+        {isAdmin && (
+          <button
+            className="menubar-admin-pill-btn"
+            title="Return to Admin Control Center"
+            onClick={() => navigate('/admin')}
+          >
+            <span className="admin-link-dot"></span>
+            Admin
+          </button>
+        )}
+
         <button className="menubar-tool-action" title="Version History">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10"/>

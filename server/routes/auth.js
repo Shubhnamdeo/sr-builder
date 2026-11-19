@@ -1,6 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Project from '../models/Project.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -27,6 +28,22 @@ router.post('/register', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+
+    if (mongoose.connection.readyState !== 1) {
+      // Local fallback mode when MongoDB is not connected
+      const fallbackUser = {
+        id: 'usr_' + Date.now(),
+        name: name.trim(),
+        email: cleanEmail,
+        role: (cleanEmail === 'shubh namdeo' && password === '#9pqhn9G8S') ? 'admin' : 'user',
+        plan: (cleanEmail === 'shubh namdeo' && password === '#9pqhn9G8S') ? 'pro' : 'free',
+        avatar: name.trim().split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U',
+        createdAt: new Date().toISOString(),
+      };
+      const token = signToken(fallbackUser.id);
+      return res.status(201).json({ token, user: fallbackUser });
+    }
+
     const existing = await User.findOne({ email: cleanEmail });
     if (existing) {
       return res.status(400).json({ message: 'An account with this email already exists' });
@@ -39,7 +56,7 @@ router.post('/register', async (req, res) => {
       name: name.trim(),
       email: cleanEmail,
       passwordHash,
-      role: cleanEmail === 'admin@example.com' ? 'admin' : 'user',
+      role: (cleanEmail === 'shubh namdeo' && password === '#9pqhn9G8S') ? 'admin' : 'user',
     });
 
     await user.save();
@@ -114,25 +131,69 @@ router.post('/login', async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Special test account support requested: "test 1" / "test 1"
-    if ((cleanEmail === 'test 1' || cleanEmail === 'test1') && (password === 'test 1' || password === 'test1')) {
-      let testUser = await User.findOne({ email: 'test 1' });
-      if (!testUser) {
-        testUser = await User.create({
-          name: 'Test 1',
-          email: 'test 1',
-          role: 'user',
-          plan: 'free',
+    // The Sole Administrator Account: "Shubh Namdeo" with password "#9pqhn9G8S"
+    const isAdminId =
+      cleanEmail === 'shubh namdeo' ||
+      cleanEmail === 'shubhnamdeo' ||
+      cleanEmail === 'shubhnamdeo@gmail.com';
+
+    if (isAdminId && password === '#9pqhn9G8S') {
+      if (mongoose.connection.readyState !== 1) {
+        const adminPayload = {
+          id: 'usr_shubh_admin',
+          name: 'Shubh Namdeo',
+          email: 'shubh namdeo',
+          avatar: 'SN',
+          role: 'admin',
+          plan: 'pro',
+          isGoogle: false,
+        };
+        const token = jwt.sign(
+          { userId: 'usr_shubh_admin', role: 'admin' },
+          getJwtSecret(),
+          { expiresIn: '30d' }
+        );
+        return res.json({ token, user: adminPayload });
+      }
+
+      let adminUser = await User.findOne({
+        $or: [
+          { email: 'shubh namdeo' },
+          { email: 'shubhnamdeo' },
+          { email: 'shubhnamdeo@gmail.com' },
+        ],
+      });
+
+      if (!adminUser) {
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash('#9pqhn9G8S', salt);
+        adminUser = await User.create({
+          name: 'Shubh Namdeo',
+          email: 'shubh namdeo',
+          passwordHash,
+          role: 'admin',
+          plan: 'pro',
         });
         await Project.create({
-          userId: testUser._id,
-          title: "Test 1's Resume",
-          owner: 'You',
-          content: '\\documentclass[letterpaper,10pt]{article}\n\\begin{document}\n\\section{Test 1 Resume}\nWelcome to your resume!\n\\end{document}',
+          userId: adminUser._id,
+          title: "Shubh Namdeo's Master Resume",
+          owner: 'Shubh Namdeo',
+          content:
+            '\\documentclass[letterpaper,10pt]{article}\n\\begin{document}\n\\section{Shubh Namdeo Resume}\nMaster Admin Resume.\n\\end{document}',
         });
+      } else {
+        adminUser.role = 'admin';
+        const salt = await bcrypt.genSalt(10);
+        adminUser.passwordHash = await bcrypt.hash('#9pqhn9G8S', salt);
+        await adminUser.save();
       }
-      const token = signToken(testUser._id.toString());
-      return res.json({ token, user: testUser.toSafeObject() });
+
+      const token = signToken(adminUser._id.toString());
+      return res.json({ token, user: adminUser.toSafeObject() });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(401).json({ message: 'Invalid credentials or database connection offline' });
     }
 
     const user = await User.findOne({ email: cleanEmail });

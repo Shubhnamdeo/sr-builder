@@ -113,4 +113,30 @@ export const api = {
         ...options,
       }),
   },
+
+  // Admin Endpoints
+  admin: {
+    getStats: () => request('/admin/stats'),
+    getUsers: () => request('/admin/users'),
+    getProjects: () => request('/admin/projects'),
+    getProjectById: (id) => request(`/admin/projects/${id}`),
+    updateUserRole: (id, role) =>
+      request(`/admin/users/${id}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }),
+    deleteUser: (id) =>
+      request(`/admin/users/${id}`, {
+        method: 'DELETE',
+      }),
+    deleteProject: (id) =>
+      request(`/admin/projects/${id}`, {
+        method: 'DELETE',
+      }),
+    updateProject: (id, updates) =>
+      request(`/admin/projects/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      }),
+  },
 };

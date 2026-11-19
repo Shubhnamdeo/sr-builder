@@ -17,7 +17,7 @@ function ProjectDashboard() {
     usedResumes,
     remainingResumes
   } = useProjects();
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -146,6 +146,16 @@ function ProjectDashboard() {
           {/* Overleaf logo shown in sidebar */}
         </div>
         <div className="top-nav-right">
+          {isAdmin && (
+            <button
+              className="admin-portal-link-btn"
+              onClick={() => navigate('/admin')}
+              title="Open Admin Control Center"
+            >
+              <span className="admin-link-dot"></span>
+              Admin Portal &rarr;
+            </button>
+          )}
           <div className="storage-quota-badge" title={`${usedResumes} of ${maxResumes} resumes stored in cloud`}>
             <span className="storage-quota-pill">{usedResumes} / {maxResumes} Resumes</span>
           </div>
