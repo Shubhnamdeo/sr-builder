@@ -95,18 +95,18 @@ const hybridCodeMode = {
 const hybridLanguage = StreamLanguage.define(hybridCodeMode);
 
 const syntaxHighlighter = HighlightStyle.define([
-  { tag: tags.keyword, color: '#0284c7', fontWeight: 'bold' },
-  { tag: tags.tagName, color: '#38bdf8', fontWeight: 'bold' },
-  { tag: tags.heading, color: '#0ea5e9', fontWeight: 'bold' },
-  { tag: tags.strong, color: '#7dd3fc' },
-  { tag: tags.link, color: '#38bdf8' },
-  { tag: tags.atom, color: '#60a5fa' },
-  { tag: tags.string, color: '#7dd3fc' },
-  { tag: tags.comment, color: '#64748b', fontStyle: 'italic' },
-  { tag: tags.bracket, color: '#eab308' },
-  { tag: tags.squareBracket, color: '#d946ef' },
-  { tag: tags.processingInstruction, color: '#0284c7' },
-  { tag: tags.operator, color: '#94a3b8' },
+  { tag: tags.keyword, color: '#D4BCC8', fontWeight: 'bold' },
+  { tag: tags.tagName, color: '#E2D1DA', fontWeight: 'bold' },
+  { tag: tags.heading, color: '#D4BCC8', fontWeight: 'bold' },
+  { tag: tags.strong, color: '#FFFFFF' },
+  { tag: tags.link, color: '#D4BCC8' },
+  { tag: tags.atom, color: '#C4A9B7' },
+  { tag: tags.string, color: '#E2D1DA' },
+  { tag: tags.comment, color: '#7C7479', fontStyle: 'italic' },
+  { tag: tags.bracket, color: '#D4BCC8' },
+  { tag: tags.squareBracket, color: '#C4A9B7' },
+  { tag: tags.processingInstruction, color: '#D4BCC8' },
+  { tag: tags.operator, color: '#9E939A' },
 ]);
 
 const CodeEditor = forwardRef(({ value, onChange }, ref) => {
@@ -226,7 +226,7 @@ const CodeEditor = forwardRef(({ value, onChange }, ref) => {
       '&': {
         height: '100%',
         fontSize: '14px',
-        backgroundColor: '#1b2234',
+        backgroundColor: '#17191D',
         color: '#f8fafc',
       },
       '.cm-content': {
@@ -234,30 +234,30 @@ const CodeEditor = forwardRef(({ value, onChange }, ref) => {
         padding: '12px 0',
       },
       '.cm-gutters': {
-        backgroundColor: '#171e2e',
-        color: '#64748b',
+        backgroundColor: '#131417',
+        color: '#9E939A',
         border: 'none',
-        borderRight: '1px solid #233149',
+        borderRight: '1px solid #282C35',
         minWidth: '46px',
         paddingRight: '6px',
       },
       '.cm-activeLineGutter': {
-        backgroundColor: '#202b3f',
-        color: '#cbd5e1',
+        backgroundColor: '#242730',
+        color: '#D4BCC8',
         fontWeight: 'bold',
       },
       '.cm-activeLine': {
-        backgroundColor: 'rgba(37, 99, 235, 0.08)',
+        backgroundColor: 'rgba(212, 188, 200, 0.08)',
       },
       '.cm-cursor': {
-        borderLeftColor: '#38bdf8',
+        borderLeftColor: '#D4BCC8',
         borderLeftWidth: '2px',
       },
       '.cm-selectionBackground': {
-        backgroundColor: '#1e3a8a !important',
+        backgroundColor: 'rgba(212, 188, 200, 0.25) !important',
       },
       '&.cm-focused .cm-selectionBackground': {
-        backgroundColor: '#1e3a8a !important',
+        backgroundColor: 'rgba(212, 188, 200, 0.3) !important',
       },
       '.cm-foldGutter': {
         width: '14px',

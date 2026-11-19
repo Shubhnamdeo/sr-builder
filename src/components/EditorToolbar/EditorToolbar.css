@@ -3,8 +3,8 @@
   align-items: center;
   justify-content: space-between;
   height: 36px;
-  background-color: #172031;
-  border-bottom: 1px solid #233149;
+  background-color: #17191D;
+  border-bottom: 1px solid #282C35;
   padding: 0 10px;
   user-select: none;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -35,12 +35,12 @@
 }
 
 .subtoolbar-icon-btn:hover {
-  background-color: #243550;
+  background-color: #272B33;
   color: #ffffff;
 }
 
 .sparkle-btn {
-  color: #60a5fa;
+  color: #D4BCC8;
 }
 
 .font-tt-btn {
@@ -59,7 +59,7 @@
 .subtoolbar-separator {
   width: 1px;
   height: 18px;
-  background-color: #28374f;
+  background-color: #282C35;
   margin: 0 4px;
 }
 
@@ -67,8 +67,8 @@
 .code-visual-switch {
   display: flex;
   align-items: center;
-  background-color: #131927;
-  border: 1px solid #2b3956;
+  background-color: #131417;
+  border: 1px solid #2D313A;
   border-radius: 4px;
   overflow: hidden;
   padding: 2px;
@@ -91,8 +91,9 @@
 }
 
 .switch-option-btn.switch-active-green {
-  background-color: #0284c7;
-  color: #ffffff;
+  background-color: #D4BCC8;
+  color: #17191D;
+  font-weight: 700;
 }
 
 /* Editing Mode Dropdown */
@@ -105,7 +106,7 @@
   align-items: center;
   gap: 5px;
   background: none;
-  border: 1px solid #2b3956;
+  border: 1px solid #2D313A;
   border-radius: 4px;
   color: #cbd5e1;
   font-size: 12px;
@@ -116,7 +117,7 @@
 }
 
 .editing-mode-selector-btn:hover {
-  background-color: #243550;
+  background-color: #272B33;
   color: #ffffff;
 }
 
@@ -125,11 +126,11 @@
   top: 100%;
   right: 0;
   width: 240px;
-  background-color: #172031;
-  border: 1px solid #283953;
+  background-color: #17191D;
+  border: 1px solid #2E333D;
   border-radius: 6px;
   padding: 6px 0;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   margin-top: 4px;
   z-index: 200;
 }
@@ -144,15 +145,15 @@
 }
 
 .editing-flyout-item:hover {
-  background-color: #243550;
+  background-color: #272B33;
 }
 
 .editing-flyout-item.active {
-  background-color: #1b283d;
+  background-color: #242730;
 }
 
 .flyout-check {
-  color: #38bdf8;
+  color: #D4BCC8;
   font-weight: bold;
   font-size: 12px;
   width: 14px;
@@ -171,5 +172,5 @@
 
 .flyout-desc {
   font-size: 11px;
-  color: #94a3b8;
+  color: #9E939A;
 }

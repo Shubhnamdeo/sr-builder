@@ -119,8 +119,9 @@
 }
 
 .template-card.selected {
-  border-color: #0ea5e9;
-  background: rgba(14, 165, 233, 0.15);
+  border-color: #D4BCC8;
+  background: rgba(212, 188, 200, 0.15);
+  color: #ffffff;
 }
 
 .template-icon {
@@ -155,14 +156,15 @@
 
 .btn-create {
   padding: 8px 24px;
-  background: linear-gradient(135deg, #0284c7, #0ea5e9);
-  color: white;
+  background: #D4BCC8;
+  color: #17191D;
   border-radius: 4px;
   font-size: 14px;
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(212, 188, 200, 0.35);
+  transition: background 0.15s;
 }
 
 .btn-create:hover {
-  background: #0369a1;
+  background: #E2D1DA;
 }

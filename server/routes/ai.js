@@ -2,6 +2,7 @@ import dns from 'node:dns';
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 import express from 'express';
+import { DEFAULT_RESUME_LATEX } from '../templates/defaultResume.js';
 
 const router = express.Router();
 
@@ -98,13 +99,16 @@ router.post('/chat', async (req, res) => {
       .join('\n');
 
     const latestPrompt = userInstruction || (messages.length ? messages[messages.length - 1].text : '');
+    const activeBaseCode = (currentCode && currentCode.includes('\\documentclass')) 
+      ? currentCode 
+      : DEFAULT_RESUME_LATEX;
 
     const systemPrompt = `You are an expert AI Resume Consultant, Career Advisor, and LaTeX Engineer for "SR Builder".
 You are collaborating with a user on their LaTeX resume.
 
 CURRENT RESUME LATEX CODE:
 \`\`\`latex
-${currentCode}
+${activeBaseCode}
 \`\`\`
 
 RECENT CONVERSATION HISTORY:
@@ -121,17 +125,15 @@ YOUR BEHAVIOR GUIDELINES:
      DO NOT output any LaTeX code block if the user is just asking a question, discussing ideas, or troubleshooting!
    - If the user says "no changes after accepting", "didn't change", or similar troubleshooting feedback:
      Explain warmly: "When you click 'Accept & Apply Code', the editor updates main.tex. To update the visual PDF preview on the right, please click the green 'Recompile' button at the top right of the editor. What specific changes would you like to make to your resume?"
-3. CONCRETE RESUME CODE MODIFICATIONS:
-   - When the user asks to modify, format, add, or rewrite something in their resume (such as:
-     * Adding or changing work experience, jobs, or internships (e.g. 'add software developer at Deloitte with 5 months experience')
-     * Adding skills, projects, certifications, or education
-     * Changing font size, margins, spacing, or contact details):
+3. CONCRETE RESUME CODE MODIFICATIONS & JOB DESCRIPTION TAILORING:
+   - When the user asks to modify, format, add, or rewrite something in their resume, or tailor from a Job Description:
      1. Briefly explain what you updated in 1 friendly conversational sentence.
-     2. Output the COMPLETE updated LaTeX document inside a single \`\`\`latex ... \`\`\` code block.
-     3. For any new job or experience, create a clean entry with company name, job title, duration, and 2-3 strong, quantifiable bullet points formatted with standard LaTeX list tags.
-     4. Support multi-page resumes (1 page, 2 pages, and up to 5 pages) based on content depth. When the user adds extensive experience, projects, certifications, or detailed bullets, let the resume expand naturally into 2, 3, 4, or up to 5 pages. Do not arbitrarily compress or drop details to force a single page unless the user explicitly requests a 1-page compact layout. You may insert \\newpage between major sections when appropriate for clean page transitions.
-     5. Make sure the LaTeX code compiles cleanly with valid syntax and no missing brackets or broken packages.
-     6. Never invent fake personal contact details.`;
+     2. MUST PRESERVE the exact Overleaf / Jake's Resume LaTeX structure and custom macros: \\resumeSubheading, \\resumeProjectHeading, \\resumeItem, \\resumeSubHeadingListStart, \\resumeSubHeadingListEnd. Never delete or alter these core macro definitions.
+     3. Output the COMPLETE updated LaTeX document inside a single \`\`\`latex ... \`\`\` code block.
+     4. For any new job or experience, create a clean entry with company name, job title, duration, and 2-3 strong, quantifiable bullet points formatted with standard LaTeX list tags.
+     5. Support multi-page resumes (1 page, 2 pages, and up to 5 pages) based on content depth. When the user adds extensive experience, projects, certifications, or detailed bullets, let the resume expand naturally into 2, 3, 4, or up to 5 pages. Do not arbitrarily compress or drop details to force a single page unless the user explicitly requests a 1-page compact layout. You may insert \\newpage between major sections when appropriate for clean page transitions.
+     6. Make sure the LaTeX code compiles cleanly with valid syntax and no missing brackets or broken packages.
+     7. Never invent fake personal contact details.`;
 
     const { rawText, usedModel } = await callGeminiModels(systemPrompt, apiKey, 8192, 0.3);
 

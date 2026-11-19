@@ -27,23 +27,37 @@ export default function LoginPage({ defaultMode = 'login' }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Active showcase slide indicator
+  // Active showcase slide indicator with auto-rotation (2.6s smooth cycle)
   const [activeSlide, setActiveSlide] = useState(0);
 
   const showcaseSlides = [
     {
+      step: '01',
+      badge: 'Input & Profile',
       title: 'Precision Resumes, Powered by LaTeX',
-      subtitle: 'Engineered for ATS compliance and clean typography.'
+      subtitle: 'Enter plain English prompts, job requirements, or raw experience.'
     },
     {
+      step: '02',
+      badge: 'AI & LaTeX Engine',
       title: 'AI Code Assistant, Zero Syntax Hassle',
       subtitle: 'Prompt in plain English to tailor projects and experience.'
     },
     {
+      step: '03',
+      badge: 'Single-Page ATS Fit',
       title: 'Single-Page Guaranteed Layouts',
       subtitle: 'Strict mathematical margin budgeting fits every profile.'
     }
   ];
+
+  // Auto-change diagram and slide content smoothly every 2.6 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveSlide((prev) => (prev + 1) % showcaseSlides.length);
+    }, 2600);
+    return () => clearInterval(timer);
+  }, [showcaseSlides.length]);
 
   const from = location.state?.from?.pathname || '/projects';
 
@@ -123,13 +137,164 @@ export default function LoginPage({ defaultMode = 'login' }) {
             </button>
           </div>
 
+          {/* Middle: Live Step-by-Step Architecture Diagram */}
+          <div className="auth-diagram-stage">
+            {/* 3-Step Pipeline Flow Bar */}
+            <div className="diagram-pipeline-bar">
+              <div 
+                className={`pipeline-step ${activeSlide === 0 ? 'active' : activeSlide > 0 ? 'completed' : ''}`}
+                onClick={() => setActiveSlide(0)}
+              >
+                <span className="step-num">01</span>
+                <span className="step-name">Input</span>
+              </div>
+              <div className={`pipeline-track ${activeSlide >= 1 ? 'active' : ''}`}>
+                <div className="track-pulse"></div>
+              </div>
+              <div 
+                className={`pipeline-step ${activeSlide === 1 ? 'active' : activeSlide > 1 ? 'completed' : ''}`}
+                onClick={() => setActiveSlide(1)}
+              >
+                <span className="step-num">02</span>
+                <span className="step-name">AI + LaTeX</span>
+              </div>
+              <div className={`pipeline-track ${activeSlide >= 2 ? 'active' : ''}`}>
+                <div className="track-pulse"></div>
+              </div>
+              <div 
+                className={`pipeline-step ${activeSlide === 2 ? 'active' : ''}`}
+                onClick={() => setActiveSlide(2)}
+              >
+                <span className="step-num">03</span>
+                <span className="step-name">ATS PDF</span>
+              </div>
+            </div>
+
+            {/* Dynamic Step Visual Canvas */}
+            <div className="diagram-card-container">
+              {/* Step 01: Natural Language Input */}
+              <div className={`diagram-slide-pane ${activeSlide === 0 ? 'active' : ''}`}>
+                <div className="diagram-card-header">
+                  <div className="diagram-tag-badge">
+                    <span className="dot pulse-dot"></span>
+                    Step 01 &bull; Candidate Data
+                  </div>
+                  <span className="diagram-card-file">prompt.txt</span>
+                </div>
+                
+                <div className="diagram-prompt-box">
+                  <span className="terminal-prompt">&gt;</span>
+                  <span className="prompt-text">
+                    "Tailor resume for Senior Full Stack Engineer with clean metrics"
+                  </span>
+                </div>
+
+                <div className="diagram-chips-row">
+                  <span className="diagram-chip">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    Work Experience
+                  </span>
+                  <span className="diagram-chip">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    Core Skills
+                  </span>
+                  <span className="diagram-chip">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    ATS Keywords
+                  </span>
+                </div>
+
+                <div className="diagram-status-footer">
+                  <span className="status-indicator active-dot"></span>
+                  <span className="status-text">Parsing data &bull; Aligning job targets</span>
+                </div>
+              </div>
+
+              {/* Step 02: Gemini AI + LaTeX Engine */}
+              <div className={`diagram-slide-pane ${activeSlide === 1 ? 'active' : ''}`}>
+                <div className="diagram-card-header">
+                  <div className="diagram-tag-badge highlight">
+                    <span className="dot pulse-lilac"></span>
+                    Step 02 &bull; LaTeX + Gemini AI
+                  </div>
+                  <span className="diagram-card-file">engine.tex</span>
+                </div>
+
+                <div className="diagram-code-box">
+                  <div className="code-line">
+                    <span className="code-kw">\resumeSubheading</span>&#123;Lead Developer&#125;&#123;2024&#125;
+                  </div>
+                  <div className="code-line highlight">
+                    <span className="code-kw">\item</span> Optimized action verbs <span className="code-accent">+38% impact</span>
+                  </div>
+                  <div className="code-line">
+                    <span className="code-kw">\item</span> Matched 18 / 18 ATS keyword criteria
+                  </div>
+                </div>
+
+                <div className="diagram-chips-row">
+                  <span className="diagram-chip highlight">&#10022; Gemini 2.0 AI</span>
+                  <span className="diagram-chip highlight">&#123; \TeX &#125; Real-Time</span>
+                  <span className="diagram-chip">Auto-Budget</span>
+                </div>
+
+                <div className="diagram-status-footer">
+                  <span className="status-indicator compiling-dot"></span>
+                  <span className="status-text">Mathematical spacing &bull; LaTeX typesetting</span>
+                </div>
+              </div>
+
+              {/* Step 03: ATS Single-Page PDF */}
+              <div className={`diagram-slide-pane ${activeSlide === 2 ? 'active' : ''}`}>
+                <div className="diagram-card-header">
+                  <div className="diagram-tag-badge success">
+                    <span className="dot success-dot"></span>
+                    Step 03 &bull; Production Output
+                  </div>
+                  <span className="diagram-card-file">resume.pdf</span>
+                </div>
+
+                <div className="diagram-mini-resume-preview">
+                  <div className="mini-sheet">
+                    <div className="sheet-top-line"></div>
+                    <div className="sheet-sub-line"></div>
+                    <div className="sheet-rule"></div>
+                    <div className="sheet-section-tag"></div>
+                    <div className="sheet-bullet"></div>
+                    <div className="sheet-bullet short"></div>
+                    <div className="sheet-section-tag"></div>
+                    <div className="sheet-bullet"></div>
+                  </div>
+                  
+                  <div className="mini-verified-badge">
+                    <div className="score-badge-circle">
+                      <span className="score-val">98</span>
+                      <span className="score-lbl">ATS</span>
+                    </div>
+                    <div className="verified-details">
+                      <span className="verified-title">&#10003; ATS Screening Passed</span>
+                      <span className="verified-sub">1-Page Strictly Fitted</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="diagram-status-footer">
+                  <span className="status-indicator ready-dot"></span>
+                  <span className="status-text">Single-page guaranteed &bull; High-res vector PDF</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="auth-visual-body">
-            <h2 className="visual-headline">
-              {showcaseSlides[activeSlide].title}
-            </h2>
-            <p className="visual-caption">
-              {showcaseSlides[activeSlide].subtitle}
-            </p>
+            <div className="visual-text-wrapper" key={activeSlide}>
+              <h2 className="visual-headline">
+                {showcaseSlides[activeSlide].title}
+              </h2>
+              <p className="visual-caption">
+                {showcaseSlides[activeSlide].subtitle}
+              </p>
+            </div>
 
             <div className="carousel-indicators">
               {showcaseSlides.map((_, idx) => (
@@ -139,7 +304,11 @@ export default function LoginPage({ defaultMode = 'login' }) {
                   className={`indicator-pill ${idx === activeSlide ? 'active' : ''}`}
                   onClick={() => setActiveSlide(idx)}
                   aria-label={`Slide ${idx + 1}`}
-                />
+                >
+                  {idx === activeSlide && (
+                    <span className="indicator-progress-bar" key={`bar-${activeSlide}`} />
+                  )}
+                </button>
               ))}
             </div>
           </div>

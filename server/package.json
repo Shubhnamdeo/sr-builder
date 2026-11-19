@@ -1,6 +1,6 @@
 {
   "name": "sr-builder-server",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Backend API for SR Builder (LaTeX Resume Builder) with MongoDB, JWT Auth and Multi-User Cloud Storage",
   "main": "server.js",
   "type": "module",

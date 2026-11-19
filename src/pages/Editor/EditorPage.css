@@ -94,7 +94,7 @@
 .editor-tab.active {
   color: var(--text-primary);
   background: var(--bg-editor);
-  border-top: 2px solid #0ea5e9;
+  border-top: 2px solid #D4BCC8;
 }
 
 .tab-close {
@@ -113,7 +113,7 @@
 
 .split-divider {
   width: 8px;
-  background: #333;
+  background: #282C35;
   cursor: col-resize;
   display: flex;
   align-items: center;
@@ -127,14 +127,14 @@
 
 .split-divider:hover,
 .split-divider.dragging {
-  background: #444;
+  background: #383D4A;
 }
 
 .divider-handle {
   display: flex;
   flex-direction: column;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: #1F2228;
+  border: 1px solid #2E333D;
   border-radius: 12px;
   padding: 2px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
@@ -150,7 +150,7 @@
   justify-content: center;
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: #D4BCC8;
   border-radius: 10px;
   font-size: 11px;
   cursor: pointer;
@@ -161,13 +161,13 @@
 }
 
 .divider-btn:hover {
-  background: #334155;
+  background: #272B33;
   color: #ffffff;
 }
 
 .divider-sep {
   height: 1px;
-  background: #334155;
+  background: #282C35;
   margin: 1px 2px;
 }
 

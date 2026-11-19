@@ -42,18 +42,6 @@ function LandingPage() {
           <button className="nav-signup-btn" onClick={() => navigate('/signup')}>
             Get started
           </button>
-          <a
-            href="https://linkedin.com/in/shubh-namdeo-8a9902186"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="nav-linkedin-link"
-            title="Shubh Namdeo on LinkedIn"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9h2.79v8.37H6.46v-8.37M7.86 6.81a1.62 1.62 0 1 0 0 3.24 1.62 1.62 0 0 0 0-3.24z"/>
-            </svg>
-            <span>LinkedIn</span>
-          </a>
         </div>
       </header>
 
@@ -65,7 +53,7 @@ function LandingPage() {
         </h1>
 
         <p className="hero-subtitle">
-          Professional Overleaf-grade typography designed to pass ATS screening. 
+          Professional LaTeX-grade typography designed to pass ATS screening. 
           Tailor sections in natural language and export high-resolution PDFs.
         </p>
 
