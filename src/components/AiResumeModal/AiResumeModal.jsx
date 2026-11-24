@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../../services/api.js';
 import { SOFTWARE_ENGINEER_TEMPLATE } from '../../utils/latexTemplates.js';
+import { extractTextFromFile, parseResumeLocally } from '../../utils/pdfTextExtractor.js';
 import './AiResumeModal.css';
 
 // Extract the updated section/code for a clean preview without red and green markings
@@ -129,6 +130,120 @@ Strict Guidelines:
           .replace(/```latex[\s\S]*?```/gi, '')
           .replace(/```[\s\S]*?```/gi, '')
           .trim() || (isCodeUpdate ? 'Updated your resume code:' : 'Here is what you need to know:');
+
+        cachedWorkingModel = cand;
+        return { isCodeUpdate, newCode: isCodeUpdate ? newCode : currentCode, explanation };
+      } catch (err) {
+        lastError = err;
+        if (err.message && (err.message.includes('API_KEY_INVALID') || err.message.includes('API key not valid'))) {
+          throw err;
+        }
+        if (attempt < 2) {
+          await sleep(5000);
+        }
+      }
+    }
+  }
+
+  throw lastError || new Error('No available Gemini model found.');
+}
+
+// Multi-candidate Gemini caller for resume extraction from uploaded PDF / TXT
+async function callGeminiResumeExtraction(apiKey, currentCode, resumeText, signal = null) {
+  const activeKey = (apiKey || DEFAULT_API_KEY).trim();
+  const baseCodeToUse = (currentCode && currentCode.includes('\\documentclass'))
+    ? currentCode
+    : SOFTWARE_ENGINEER_TEMPLATE;
+
+  const prompt = `You are an expert AI Resume Consultant, Career Advisor, and LaTeX Engineer for "SR Builder".
+The user has uploaded their existing resume in plain text format. Your job is to extract their authentic career details and map them cleanly into the active LaTeX resume template, completely replacing the placeholder template data.
+
+--- USER'S UPLOADED RESUME TEXT ---
+${resumeText}
+--- END RESUME TEXT ---
+
+CURRENT RESUME LATEX CODE (TEMPLATE):
+\`\`\`latex
+${baseCodeToUse}
+\`\`\`
+
+Strict Guidelines:
+1. Extract authentic candidate information from the uploaded resume:
+   - Full Name
+   - Contact Info (Email, Phone, Location, LinkedIn, GitHub, Portfolio)
+   - Professional Summary (synthesize or use their summary, keeping it high-impact and 2-3 lines)
+   - Work Experience (Job titles, company names, dates, locations, and bullet points)
+   - Education (Degree, major, university, dates, GPA if mentioned)
+   - Technical Skills (categorized into Languages, Frameworks/Developer Tools, Libraries, etc.)
+   - Projects (if present in the uploaded text)
+2. Map their details directly into the existing template macros:
+   - \\resumeSubheading, \\resumeProjectHeading, \\resumeItem, \\resumeSubHeadingListStart, \\resumeSubHeadingListEnd
+   - Preserve all macro definitions and LaTeX preamble. Never delete or break \\documentclass, \\usepackage, or macro definitions.
+3. Replace all dummy/placeholder data (e.g. placeholder names, sample colleges, fake jobs) with the user's authentic career details.
+4. Escape LaTeX special characters properly (e.g. & to \\&, % to \\%, $ to \\$, _ to \\_, # to \\#).
+5. Support clean multi-page or 1-page formatting based on content volume.
+6. Format your output:
+   - Start with a brief, friendly 2-line summary describing what was extracted (e.g. "Extracted candidate details, 2 positions, education, and technical skills.").
+   - End with the COMPLETE, compilable LaTeX code inside a single \`\`\`latex ... \`\`\` block.`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 8192 }
+  };
+
+  const candidateModels = [
+    ...(cachedWorkingModel ? [cachedWorkingModel] : []),
+    { ver: 'v1beta', name: 'gemini-3.5-flash-lite' },
+    { ver: 'v1beta', name: 'gemini-3.1-flash-lite' },
+    { ver: 'v1beta', name: 'gemini-3.8-flash' },
+    { ver: 'v1beta', name: 'gemini-3.5-flash' },
+    { ver: 'v1beta', name: 'gemini-2.5-flash' }
+  ];
+
+  let lastError = null;
+  for (const cand of candidateModels) {
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      const url = `https://generativelanguage.googleapis.com/${cand.ver}/models/${cand.name}:generateContent?key=${encodeURIComponent(activeKey)}`;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': activeKey },
+          body: JSON.stringify(payload),
+          signal
+        });
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          const msg = errJson.error?.message || `HTTP ${res.status}`;
+          if (res.status === 503 || res.status === 429) {
+            if (attempt < 2) {
+              await sleep(5000);
+              continue;
+            }
+          }
+          if (res.status === 404 || msg.includes('not found') || msg.includes('no longer available')) {
+            break;
+          }
+          throw new Error(msg);
+        }
+
+        const data = await res.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const rawText = parts.map(p => p.text || '').join('').trim();
+
+        const codeBlockMatch = rawText.match(/```latex\s*([\s\S]*?)\s*```/i) || rawText.match(/```\s*([\s\S]*?)\s*```/i);
+        let newCode = null;
+        let isCodeUpdate = false;
+
+        if (codeBlockMatch && codeBlockMatch[1].includes('\\documentclass')) {
+          newCode = codeBlockMatch[1].trim();
+          isCodeUpdate = newCode !== currentCode;
+        }
+
+        const explanation = rawText
+          .replace(/```latex[\s\S]*?```/gi, '')
+          .replace(/```[\s\S]*?```/gi, '')
+          .trim() || 'Extracted your career details and mapped them to the LaTeX template:';
 
         cachedWorkingModel = cand;
         return { isCodeUpdate, newCode: isCodeUpdate ? newCode : currentCode, explanation };
@@ -526,6 +641,121 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
   ]);
 
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Handle uploaded resume file (PDF, TXT, TEX)
+  const handleFileUpload = async (e) => {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+
+    if (e.target) e.target.value = '';
+
+    const userMsgId = 'usr-up-' + Date.now();
+    const newChat = [
+      ...chatHistory,
+      { id: userMsgId, sender: 'user', text: `📄 Uploaded resume: ${file.name}` }
+    ];
+    setChatHistory(newChat);
+    setIsProcessing(true);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    setActiveTasks([
+      { id: 't1', title: `Extracting text from ${file.name} (PDF/TXT)...`, status: 'running' },
+      { id: 't2', title: 'AI mapping career history & skills to LaTeX template...', status: 'pending' },
+      { id: 't3', title: 'Preparing code preview & LaTeX diff...', status: 'pending' },
+    ]);
+
+    try {
+      // 1. Client-side extraction via pdfjs-dist / FileReader
+      const resumeText = await extractTextFromFile(file);
+
+      setActiveTasks(prev => [
+        { ...prev[0], status: 'completed', title: `Extracted text from ${file.name}` },
+        { ...prev[1], status: 'running' },
+        prev[2]
+      ]);
+
+      let modifiedCode = currentCode;
+      let aiExplanation = '';
+      let isCodeUpdate = false;
+
+      // 2. Try Backend AI Endpoint first
+      try {
+        const backendRes = await api.ai.parseResume(resumeText, currentCode, { signal: abortController.signal });
+        if (backendRes && (backendRes.text || backendRes.newCode)) {
+          aiExplanation = backendRes.text || 'I have populated your resume with your authentic experience:';
+          if (backendRes.isCodeUpdate && backendRes.newCode && backendRes.newCode !== currentCode) {
+            modifiedCode = backendRes.newCode;
+            isCodeUpdate = true;
+          }
+        }
+      } catch (backendErr) {
+        if (backendErr.name === 'AbortError' || backendErr.message?.includes('aborted')) return;
+        console.warn('Backend parse resume error, trying direct Gemini client:', backendErr);
+      }
+
+      // 3. Fallback to direct client-side Gemini if backend didn't update
+      if (!isCodeUpdate) {
+        try {
+          const directGeminiRes = await callGeminiResumeExtraction(apiKey, currentCode, resumeText, abortController.signal);
+          if (directGeminiRes.isCodeUpdate) {
+            modifiedCode = directGeminiRes.newCode;
+            aiExplanation = directGeminiRes.explanation;
+            isCodeUpdate = true;
+          }
+        } catch (geminiErr) {
+          if (geminiErr.name === 'AbortError' || geminiErr.message?.includes('aborted')) return;
+          console.warn('Direct Gemini resume extraction failed, using local offline parser:', geminiErr);
+        }
+      }
+
+      // 4. Offline / local fallback if no API key
+      if (!isCodeUpdate) {
+        const localRes = parseResumeLocally(currentCode, resumeText);
+        modifiedCode = localRes.newCode;
+        aiExplanation = localRes.explanation;
+        isCodeUpdate = localRes.isCodeUpdate;
+      }
+
+      setActiveTasks(prev => [
+        prev[0],
+        { ...prev[1], status: 'completed', title: 'Career history and skills mapped to template' },
+        { ...prev[2], status: 'completed', title: 'LaTeX preview and diff ready' },
+      ]);
+
+      const snippet = isCodeUpdate ? getChangedSnippet(currentCode, modifiedCode) : '';
+
+      setChatHistory(prev => [
+        ...prev,
+        {
+          id: 'ai-up-' + Date.now(),
+          sender: 'ai',
+          text: aiExplanation + "\n\nReview the code preview below and click 'Accept & Apply Code' to update main.tex. Once applied, we can continue refining sections, tailoring for roles, or adjusting spacing right here!",
+          hasDiff: isCodeUpdate,
+          snippet: snippet,
+          proposedCode: isCodeUpdate ? modifiedCode : null,
+        }
+      ]);
+    } catch (err) {
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
+      console.error('Resume upload error:', err);
+      setChatHistory(prev => [
+        ...prev,
+        {
+          id: 'ai-err-' + Date.now(),
+          sender: 'ai',
+          text: `⚠️ Could not process "${file.name}": ${err.message || 'Error reading file.'}\n\nPlease ensure your PDF has selectable text (not a scanned image) or try uploading a .txt file.`,
+          hasDiff: false,
+        }
+      ]);
+    } finally {
+      setIsProcessing(false);
+      abortControllerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -790,6 +1020,24 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
               <span className="api-dot">{apiKey ? '●' : '○'}</span>
               <span>{apiKey ? 'API: Active' : 'Set API Key'}</span>
             </button>
+
+            {/* Upload Resume Button in Header */}
+            <button
+              className="ai-upload-resume-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing}
+              title="Upload your existing resume (PDF/TXT) to auto-populate template"
+            >
+              <span className="upload-icon">📄</span>
+              <span>Upload Resume</span>
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              accept=".pdf,.txt,.tex,.md"
+              onChange={handleFileUpload}
+            />
           </div>
           <button className="ai-drawer-close-btn" onClick={onClose} title="Close Assistant">×</button>
         </div>
@@ -813,6 +1061,38 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
         {/* Tab 1: Clean Chat */}
         {activeTab === 'chat' && (
           <div className="ai-chat-content-panel">
+            {/* Interactive Resume Upload Quick Banner */}
+            <div
+              className={`resume-upload-quick-card ${isDragging ? 'dragging' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (e.dataTransfer.files?.[0]) {
+                  handleFileUpload({ target: { files: e.dataTransfer.files } });
+                }
+              }}
+            >
+              <div className="upload-quick-left">
+                <div className="upload-quick-icon">📄</div>
+                <div className="upload-quick-body">
+                  <div className="upload-quick-title">Start from your existing resume</div>
+                  <div className="upload-quick-desc">
+                    Upload a PDF or TXT resume — AI extracts your real information and maps it into this LaTeX template.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="upload-quick-action-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessing}
+              >
+                Select File
+              </button>
+            </div>
+
             <div className="ai-messages-scroll-area">
               {chatHistory.map((msg) => (
                 <div key={msg.id} className={`ai-chat-message ${msg.sender === 'user' ? 'user-msg' : 'ai-msg'}`}>

@@ -1113,3 +1113,132 @@
   margin-left: 3px;
   color: #ffffff;
 }
+
+/* ========================================================
+   RESUME UPLOAD BUTTON & QUICK CARD STYLES
+   ======================================================== */
+
+.ai-upload-resume-btn {
+  background: linear-gradient(135deg, rgba(212, 188, 200, 0.18), rgba(181, 153, 169, 0.28));
+  border: 1px solid rgba(212, 188, 200, 0.4);
+  color: #f1f5f9;
+  border-radius: 14px;
+  padding: 3px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-left: 6px;
+}
+
+.ai-upload-resume-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(212, 188, 200, 0.35), rgba(181, 153, 169, 0.45));
+  border-color: rgba(212, 188, 200, 0.7);
+  box-shadow: 0 0 14px rgba(212, 188, 200, 0.25);
+  transform: translateY(-1px);
+  color: #ffffff;
+}
+
+.ai-upload-resume-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ai-upload-resume-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-upload-resume-btn .upload-icon {
+  font-size: 12px;
+}
+
+/* Quick Resume Upload Card inside Chat */
+.resume-upload-quick-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 12px 18px 6px 18px;
+  padding: 12px 16px;
+  background: rgba(30, 34, 42, 0.65);
+  border: 1px dashed rgba(212, 188, 200, 0.35);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+}
+
+.resume-upload-quick-card:hover {
+  background: rgba(35, 40, 50, 0.85);
+  border-color: rgba(212, 188, 200, 0.6);
+  border-style: solid;
+}
+
+.resume-upload-quick-card.dragging {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1.5px dashed #818cf8;
+  box-shadow: 0 0 16px rgba(129, 140, 248, 0.3);
+}
+
+.upload-quick-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-quick-icon {
+  font-size: 24px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+}
+
+.upload-quick-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.upload-quick-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.upload-quick-desc {
+  font-size: 11.5px;
+  color: #94a3b8;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.upload-quick-action-btn {
+  background: linear-gradient(135deg, #D4BCC8, #B599A9);
+  color: #17191D;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.upload-quick-action-btn:hover:not(:disabled) {
+  opacity: 0.95;
+  box-shadow: 0 0 12px rgba(212, 188, 200, 0.45);
+  transform: translateY(-1px);
+}
+
+.upload-quick-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

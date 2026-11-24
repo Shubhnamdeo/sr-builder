@@ -221,4 +221,87 @@ RULES:
   }
 });
 
+// Resume Upload & Extraction Endpoint
+router.post('/parse-resume', async (req, res) => {
+  try {
+    const { resumeText = '', currentCode = '' } = req.body;
+    const apiKey = getGeminiApiKey();
+
+    if (!apiKey) {
+      return res.status(500).json({
+        error: 'Gemini API key is not configured on the server.',
+      });
+    }
+
+    if (!resumeText.trim()) {
+      return res.status(400).json({ error: 'Resume text is required.' });
+    }
+
+    const activeBaseCode = (currentCode && currentCode.includes('\\documentclass')) 
+      ? currentCode 
+      : DEFAULT_RESUME_LATEX;
+
+    const systemPrompt = `You are an expert AI Resume Consultant, Career Advisor, and LaTeX Engineer for "SR Builder".
+The user has uploaded their existing resume in plain text. Your job is to extract their authentic career details and transfer them into the active LaTeX resume template, completely replacing the placeholder template data.
+
+--- USER'S UPLOADED RESUME TEXT ---
+${resumeText}
+--- END RESUME TEXT ---
+
+CURRENT RESUME TEMPLATE (main.tex):
+\`\`\`latex
+${activeBaseCode}
+\`\`\`
+
+Strict Guidelines:
+1. Extract authentic candidate information from the uploaded resume:
+   - Full Name
+   - Contact Info (Email, Phone, Location, LinkedIn, GitHub, Portfolio)
+   - Professional Summary (synthesize or use their summary, keeping it high-impact and 2-3 lines)
+   - Work Experience (Job titles, company names, dates, locations, and bullet points)
+   - Education (Degree, major, university, dates, GPA if mentioned)
+   - Technical Skills (categorized into Languages, Frameworks/Developer Tools, Libraries, etc.)
+   - Projects (if present in the uploaded text)
+2. Map their details directly into the existing template macros:
+   - \\resumeSubheading, \\resumeProjectHeading, \\resumeItem, \\resumeSubHeadingListStart, \\resumeSubHeadingListEnd
+   - Preserve all macro definitions and LaTeX preamble. Never delete or break \\documentclass, \\usepackage, or macro definitions.
+3. Replace all dummy/placeholder data (e.g. placeholder names, sample colleges, fake jobs) with the user's authentic career details.
+4. Escape LaTeX special characters properly (e.g. & to \\&, % to \\%, $ to \\$, _ to \\_, # to \\#).
+5. Support clean multi-page or 1-page formatting based on content volume.
+6. Format your output:
+   - Start with a brief, friendly 2-line summary describing what was extracted (e.g. "Extracted candidate details, 2 positions, education, and technical skills.").
+   - End with the COMPLETE, compilable LaTeX code inside a single \`\`\`latex ... \`\`\` block.`;
+
+    const { rawText, usedModel } = await callGeminiModels(systemPrompt, apiKey, 8192, 0.2);
+
+    if (!rawText) {
+      return res.status(500).json({ error: 'Failed to extract resume with AI model.' });
+    }
+
+    const codeBlockMatch = rawText.match(/```latex\s*([\s\S]*?)\s*```/i) || rawText.match(/```\s*([\s\S]*?)\s*```/i);
+    let newCode = null;
+    let isCodeUpdate = false;
+
+    if (codeBlockMatch && codeBlockMatch[1].includes('\\documentclass')) {
+      newCode = codeBlockMatch[1].trim();
+      isCodeUpdate = newCode !== currentCode;
+    }
+
+    const explanation = rawText
+      .replace(/```latex[\s\S]*?```/gi, '')
+      .replace(/```[\s\S]*?```/gi, '')
+      .trim() || 'Extracted your career details and mapped them to the LaTeX template:';
+
+    res.json({
+      isCodeUpdate,
+      newCode: newCode || currentCode,
+      text: explanation,
+      model: usedModel,
+    });
+  } catch (err) {
+    console.error('AI parse resume endpoint error:', err);
+    res.status(500).json({ error: 'Failed to process resume upload.' });
+  }
+});
+
 export default router;

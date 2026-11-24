@@ -112,6 +112,13 @@ export const api = {
         body: JSON.stringify({ snippet, instruction, currentCode }),
         ...options,
       }),
+
+    parseResume: (resumeText, currentCode, options = {}) =>
+      request('/ai/parse-resume', {
+        method: 'POST',
+        body: JSON.stringify({ resumeText, currentCode }),
+        ...options,
+      }),
   },
 
   // Admin Endpoints
