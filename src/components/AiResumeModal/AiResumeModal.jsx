@@ -576,10 +576,99 @@ ${role} (${duration}) \\\\
   };
 }
 
+// Quick, instantaneous resume inspection summary
+function getResumeSummary(latexCode = '') {
+  if (!latexCode) return 'No resume code loaded yet.';
+
+  const nameMatch = latexCode.match(/\\textbf\{\\Large\s*\\scshape\s*([^}]+)\}/i) ||
+                    latexCode.match(/\\textbf\{\\Huge\s*\\scshape\s*([^}]+)\}/i) ||
+                    latexCode.match(/\\textbf\{([A-Z][a-zA-Z\s.-]+)\}/i);
+  const name = nameMatch ? nameMatch[1].trim() : 'Not detected';
+
+  const emailMatch = latexCode.match(/\\href\{mailto:([^}]+)\}/i);
+  const email = emailMatch ? emailMatch[1].trim() : 'Not specified';
+
+  const phoneMatch = latexCode.match(/(?:\+?\d[\d\s().-]{7,}\d)/);
+  const phone = phoneMatch ? phoneMatch[0].trim() : 'Not specified';
+
+  const locMatch = latexCode.match(/\\begin\{center\}[\s\S]*?\\\\\s*(?:\\vspace\{[^}]*\}\s*)?([A-Za-z\s.-]+,\s*[A-Za-z\s.-]+)(?:\s*\$\|\$)/i);
+  const location = locMatch ? locMatch[1].trim() : 'Not specified';
+
+  const skillsMatch = latexCode.match(/\\section\{Technical Skills\}([\s\S]*?)(?:\\section|\\end\{document\})/i);
+  let skills = [];
+  if (skillsMatch) {
+    const lines = skillsMatch[1].split('\n').filter(l => l.includes('\\textbf{'));
+    skills = lines.map(l => l.replace(/[{}\\]/g, '').replace(/item/g, '').replace(/textbf/g, '').trim()).filter(Boolean);
+  }
+
+  const expMatches = [...latexCode.matchAll(/\\resumeSubheading\s*\{([^}]+)\}\{([^}]+)\}\s*\{([^}]+)\}\{([^}]+)\}/g)];
+
+  let summary = '📋 **Current Resume Information:**\n\n' +
+    '• **Name:** ' + name + '\n' +
+    '• **Address / Location:** ' + location + '\n' +
+    '• **Phone:** ' + phone + '\n' +
+    '• **Email:** ' + email + '\n';
+
+  if (skills.length) {
+    summary += '\n🛠 **Technical Skills:**\n' + skills.map(s => '  - ' + s).join('\n') + '\n';
+  }
+
+  if (expMatches.length) {
+    summary += '\n💼 **Experience (' + expMatches.length + ' roles):**\n';
+    expMatches.slice(0, 3).forEach(m => {
+      summary += '  - **' + m[1] + '** (' + m[2] + ') — *' + m[3] + '* (' + m[4] + ')\n';
+    });
+  }
+
+  summary += '\nTell me what you would like to edit or add next!';
+  return summary;
+}
+
+// Helper to determine if user message is an edit instruction vs a general question
+function isCodeEditInstruction(text = '') {
+  const lower = text.toLowerCase().trim();
+
+  // Informational / listing queries: NOT a code edit
+  if (
+    lower.includes('list the info') ||
+    lower.includes('list infromation') ||
+    lower.includes('list info') ||
+    lower.includes('list the details') ||
+    lower.includes('show the info') ||
+    lower.includes('what info') ||
+    lower.includes('what is the info') ||
+    lower.includes('show details') ||
+    lower.includes('check details') ||
+    lower.includes('tell me what') ||
+    lower.includes('what is in') ||
+    lower.includes('what are my') ||
+    lower.includes('who is') ||
+    lower.includes('explain') ||
+    lower.includes('how do i') ||
+    lower.includes('how does') ||
+    lower.includes('can you see') ||
+    lower.includes('do you see') ||
+    lower.includes('did you get') ||
+    /^(?:hi|hello|hey|help|thanks|thank you)\b/i.test(lower)
+  ) {
+    return false;
+  }
+
+  // Keywords indicating code modification
+  const editKeywords = [
+    'change', 'update', 'replace', 'modify', 'add', 'remove', 'delete',
+    'rewrite', 'edit', 'tailor', 'reformat', 'fix', 'tighten', 'compact',
+    'font', 'size', 'margin', 'spacing', 'pt', 'bullet', 'section', 'header'
+  ];
+
+  return editKeywords.some(kw => lower.includes(kw));
+}
+
 function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
   const [activeTab, setActiveTab] = useState('chat'); // 'chat', 'jd'
   const [inputMessage, setInputMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMode, setProcessingMode] = useState('code'); // 'code' or 'chat'
   const [jdText, setJdText] = useState('');
   const [jdMatchScore, setJdMatchScore] = useState(null);
 
@@ -667,6 +756,7 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
       { id: userMsgId, sender: 'user', text: `📄 Uploaded resume: ${file.name}` }
     ];
     setChatHistory(newChat);
+    setProcessingMode('code');
     setIsProcessing(true);
 
     const abortController = new AbortController();
@@ -813,33 +903,100 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
     const text = textToSend || inputMessage;
     if (!text.trim() || isProcessing) return;
 
+    const trimmed = text.trim();
+    const lower = trimmed.toLowerCase();
+
     const userMsgId = 'usr-' + Date.now();
-    const newChat = [...chatHistory, { id: userMsgId, sender: 'user', text: text.trim() }];
+    const newChat = [...chatHistory, { id: userMsgId, sender: 'user', text: trimmed }];
     setChatHistory(newChat);
     setInputMessage('');
+
+    // 1. Instant handling for "list the info / show details / check resume content"
+    const isListInfoQuery =
+      (lower.includes('list') || lower.includes('show') || lower.includes('what') || lower.includes('check') || lower.includes('give me')) &&
+      (lower.includes('info') || lower.includes('infromation') || lower.includes('information') || lower.includes('detail') || lower.includes('data') || lower.includes('content') || lower.includes('resume') || lower.includes('profile'));
+
+    if (isListInfoQuery) {
+      const summaryText = getResumeSummary(currentCode);
+      setChatHistory([
+        ...newChat,
+        {
+          id: 'ai-' + Date.now(),
+          sender: 'ai',
+          text: summaryText,
+          hasDiff: false,
+        }
+      ]);
+      return;
+    }
+
+    // 2. Instant handling for greetings and common troubleshooting questions
+    const isCasualGreeting = /^(?:hi|hello|hey|greetings|good\s+(?:morning|afternoon|evening))\b/i.test(trimmed);
+    if (isCasualGreeting) {
+      setChatHistory([
+        ...newChat,
+        {
+          id: 'ai-' + Date.now(),
+          sender: 'ai',
+          text: "Hello! I'm your AI Resume Consultant. I can help you adjust formatting, customize sections, polish bullet points with metrics, or tailor your resume for a job description. What would you like to work on?",
+          hasDiff: false,
+        }
+      ]);
+      return;
+    }
+
+    const isTroubleshooting =
+      lower.includes('no change') ||
+      lower.includes('no changes') ||
+      lower.includes("didn't change") ||
+      lower.includes('did not change') ||
+      lower.includes('nothing happened') ||
+      lower.includes('not working') ||
+      lower.includes('after accepting');
+
+    if (isTroubleshooting) {
+      setChatHistory([
+        ...newChat,
+        {
+          id: 'ai-' + Date.now(),
+          sender: 'ai',
+          text: "When you click 'Accept & Apply Code', the editor updates main.tex. To refresh the visual PDF preview on the right, make sure to click the green **Recompile** button at the top right of the editor. What specific changes would you like to make to your resume?",
+          hasDiff: false,
+        }
+      ]);
+      return;
+    }
+
+    // Determine processing mode: 'code' (code edits/diffs) vs 'chat' (general conversation)
+    const isCodeEdit = isCodeEditInstruction(trimmed);
+    setProcessingMode(isCodeEdit ? 'code' : 'chat');
     setIsProcessing(true);
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    // Initialize 2-step / 3-step live task execution monitor
-    setActiveTasks([
-      { id: 't1', title: 'Analyzing resume context & prompt intent', status: 'running' },
-      { id: 't2', title: 'Consulting Gemini 2.5 Flash model...', status: 'pending' },
-      { id: 't3', title: 'Validating LaTeX syntax & compiling preview diff', status: 'pending' },
-    ]);
+    let stepTimer = null;
+    let spikeTimer = null;
 
-    const stepTimer = setTimeout(() => {
-      setActiveTasks(prev => [
-        { ...prev[0], status: 'completed', title: 'Analyzed resume structure & prompt intent' },
-        { ...prev[1], status: 'running' },
-        prev[2]
+    if (isCodeEdit) {
+      setActiveTasks([
+        { id: 't1', title: 'Analyzing resume context & prompt intent', status: 'running' },
+        { id: 't2', title: 'Consulting Gemini 2.5 Flash model...', status: 'pending' },
+        { id: 't3', title: 'Validating LaTeX syntax & compiling preview diff', status: 'pending' },
       ]);
-    }, 350);
 
-    const spikeTimer = setTimeout(() => {
-      setSpikeNotice('Checking Gemini model capacity... auto-retrying in 5s if high demand spike occurs.');
-    }, 4000);
+      stepTimer = setTimeout(() => {
+        setActiveTasks(prev => [
+          { ...prev[0], status: 'completed', title: 'Analyzed resume structure & prompt intent' },
+          { ...prev[1], status: 'running' },
+          prev[2]
+        ]);
+      }, 350);
+
+      spikeTimer = setTimeout(() => {
+        setSpikeNotice('Checking Gemini model capacity... auto-retrying in 5s if high demand spike occurs.');
+      }, 4000);
+    }
 
     try {
       let modifiedCode = currentCode;
@@ -886,12 +1043,13 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
         }
       }
 
-      // Mark step 2 done and step 3 running
-      setActiveTasks(prev => [
-        prev[0],
-        { ...prev[1], status: 'completed', title: 'Gemini 2.5 Flash completed generation' },
-        { ...prev[2], status: 'running' }
-      ]);
+      if (isCodeEdit) {
+        setActiveTasks(prev => [
+          prev[0],
+          { ...prev[1], status: 'completed', title: 'Gemini 2.5 Flash completed generation' },
+          { ...prev[2], status: 'running' }
+        ]);
+      }
 
       const aiMsgId = 'ai-' + Date.now();
 
@@ -933,8 +1091,8 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
         }
       ]);
     } finally {
-      clearTimeout(stepTimer);
-      clearTimeout(spikeTimer);
+      if (stepTimer) clearTimeout(stepTimer);
+      if (spikeTimer) clearTimeout(spikeTimer);
       abortControllerRef.current = null;
       setIsProcessing(false);
     }
@@ -1030,7 +1188,7 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
             <span className="ai-header-title">Resume Assistant</span>
             
             {/* Active Running Tasks Pill (Antigravity-style) */}
-            {isProcessing && (
+            {isProcessing && processingMode === 'code' && (
               <div
                 className="antigravity-tasks-pill clickable"
                 onClick={handleStopProcess}
@@ -1181,7 +1339,8 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
                 </div>
               ))}
 
-              {isProcessing && (
+              {/* Code Edit Task Monitor: shown ONLY for code-editing / resume upload tasks */}
+              {isProcessing && processingMode === 'code' && (
                 <div className="ai-chat-message ai-msg task-monitor-message">
                   <div className="msg-sender-label">
                     <span>AI Assistant</span>
@@ -1244,6 +1403,18 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
                         <div className="indeterminate-glow-bar"></div>
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Quiet typing indicator for general conversation */}
+              {isProcessing && processingMode === 'chat' && (
+                <div className="ai-chat-message ai-msg">
+                  <div className="msg-sender-label">AI Assistant</div>
+                  <div className="msg-bubble-content typing-indicator-bubble">
+                    <span className="typing-dot"></span>
+                    <span className="typing-dot"></span>
+                    <span className="typing-dot"></span>
                   </div>
                 </div>
               )}
