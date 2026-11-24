@@ -256,7 +256,11 @@ ${activeBaseCode}
 Strict Guidelines:
 1. Extract authentic candidate information from the uploaded resume:
    - Full Name
-   - Contact Info (Email, Phone, Location, LinkedIn, GitHub, Portfolio)
+   - Address / Location:
+     * Search carefully for Address, City, State, Country, or Postal Location in the uploaded resume.
+     * In the LaTeX header, REPLACE the placeholder location (e.g. "San Francisco, CA") with the candidate's real location.
+     * If NO address or location is found in the resume, REMOVE "San Francisco, CA $|$" completely from the LaTeX header. Never retain fake or placeholder addresses.
+   - Contact Info (Email, Phone, LinkedIn, GitHub, Portfolio)
    - Professional Summary (synthesize or use their summary, keeping it high-impact and 2-3 lines)
    - Work Experience (Job titles, company names, dates, locations, and bullet points)
    - Education (Degree, major, university, dates, GPA if mentioned)
@@ -265,11 +269,17 @@ Strict Guidelines:
 2. Map their details directly into the existing template macros:
    - \\resumeSubheading, \\resumeProjectHeading, \\resumeItem, \\resumeSubHeadingListStart, \\resumeSubHeadingListEnd
    - Preserve all macro definitions and LaTeX preamble. Never delete or break \\documentclass, \\usepackage, or macro definitions.
-3. Replace all dummy/placeholder data (e.g. placeholder names, sample colleges, fake jobs) with the user's authentic career details.
+3. Replace all dummy/placeholder data (e.g. placeholder names, dummy address 'San Francisco, CA', sample colleges, fake jobs) with the user's authentic career details.
 4. Escape LaTeX special characters properly (e.g. & to \\&, % to \\%, $ to \\$, _ to \\_, # to \\#).
 5. Support clean multi-page or 1-page formatting based on content volume.
 6. Format your output:
-   - Start with a brief, friendly 2-line summary describing what was extracted (e.g. "Extracted candidate details, 2 positions, education, and technical skills.").
+   - Start with a structured summary listing:
+     • Name: [Extracted Name]
+     • Address / Location: [Extracted Location or "None specified in resume"]
+     • Phone: [Extracted Phone or "None specified"]
+     • Email: [Extracted Email or "None specified"]
+     • Links: [LinkedIn, GitHub, Portfolio]
+     • Experience & Education: [Summary of jobs and degrees extracted]
    - End with the COMPLETE, compilable LaTeX code inside a single \`\`\`latex ... \`\`\` block.`;
 
     const { rawText, usedModel } = await callGeminiModels(systemPrompt, apiKey, 8192, 0.2);

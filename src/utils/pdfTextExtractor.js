@@ -110,6 +110,40 @@ export function extractQuickProfileFromText(text) {
     }
   }
 
+  // Address / Location
+  let address = '';
+  const searchLines = lines.slice(0, 10);
+  for (const line of searchLines) {
+    const labelMatch = line.match(/(?:location|address|residence|residing in|city)\s*[:|-]\s*([^\n|•,]+(?:,[^\n|•]+)?)/i);
+    if (labelMatch) {
+      address = labelMatch[1].trim();
+      break;
+    }
+  }
+
+  if (!address) {
+    for (const line of searchLines) {
+      if (line.includes('@') || line.toLowerCase().includes('http') || line.toLowerCase().includes('linkedin') || line.toLowerCase().includes('github')) {
+        const parts = line.split(/[|•·\/\t]/).map(p => p.trim());
+        for (const part of parts) {
+          if (!part.includes('@') && !part.toLowerCase().includes('http') && !part.match(/^\+?\d[\d\s().-]{7,}\d$/)) {
+            if (/^[A-Za-z\s.-]+,\s*[A-Za-z\s.-]+(?:\s*\d{5,6})?$/.test(part) && part.length < 50 && part.length > 3) {
+              address = part;
+              break;
+            }
+          }
+        }
+        if (address) break;
+        continue;
+      }
+
+      if (/^[A-Za-z\s.-]+,\s*[A-Za-z\s.-]+(?:\s*\d{5,6})?$/.test(line) && line.length < 50 && line.length > 4) {
+        address = line;
+        break;
+      }
+    }
+  }
+
   // Email
   const emailMatch = text.match(/[\w.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/);
   const email = emailMatch ? emailMatch[0] : '';
@@ -126,18 +160,18 @@ export function extractQuickProfileFromText(text) {
   const githubMatch = text.match(/(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_-]+)/i);
   const github = githubMatch ? githubMatch[1] : '';
 
-  return { name, email, phone, linkedin, github, rawText: text };
+  return { name, address, email, phone, linkedin, github, rawText: text };
 }
 
 /**
  * Local offline fallback to populate template with extracted resume details
  * @param {string} currentCode
  * @param {string} resumeText
- * @returns {{ isCodeUpdate: boolean, newCode: string, explanation: string }}
+ * @returns {{ isCodeUpdate: boolean, newCode: string, explanation: string, profile: object }}
  */
 export function parseResumeLocally(currentCode, resumeText) {
   if (!currentCode || !resumeText) {
-    return { isCodeUpdate: false, newCode: currentCode, explanation: 'Unable to parse resume details.' };
+    return { isCodeUpdate: false, newCode: currentCode, explanation: 'Unable to parse resume details.', profile: null };
   }
 
   const profile = extractQuickProfileFromText(resumeText);
@@ -155,6 +189,23 @@ export function parseResumeLocally(currentCode, resumeText) {
     }
   }
 
+  // Update Address / Location (Sanitize placeholder address)
+  if (profile.address) {
+    if (updatedCode.includes('San Francisco, CA')) {
+      updatedCode = updatedCode.replace('San Francisco, CA', profile.address);
+      updates.push(`Address: ${profile.address}`);
+    } else {
+      const addrMatch = updatedCode.match(/(\\begin\{center\}[\s\S]*?\\textbf\{[^\}]+\}\s*\\\\\s*(?:\\vspace\{[^}]*\}\s*)?)([A-Za-z\s.-]+,\s*[A-Za-z\s.-]+)(\s*\$\|\$)/i);
+      if (addrMatch) {
+        updatedCode = updatedCode.replace(addrMatch[0], `${addrMatch[1]}${profile.address}${addrMatch[3]}`);
+        updates.push(`Address: ${profile.address}`);
+      }
+    }
+  } else {
+    // If user's resume does not have an address, remove the template placeholder 'San Francisco, CA'
+    updatedCode = updatedCode.replace(/San Francisco, CA\s*\$\|\$\s*/i, '');
+  }
+
   // Update Email
   if (profile.email) {
     updatedCode = updatedCode.replace(
@@ -169,6 +220,10 @@ export function parseResumeLocally(currentCode, resumeText) {
     updatedCode = updatedCode.replace(
       /\\small\s*(\+?\d[\d\s().-]{7,}\d)/g,
       `\\small ${profile.phone}`
+    );
+    updatedCode = updatedCode.replace(
+      /\+1\s*\(555\)\s*019-2834/g,
+      profile.phone
     );
     updates.push(`Phone: ${profile.phone}`);
   }
@@ -193,9 +248,9 @@ export function parseResumeLocally(currentCode, resumeText) {
 
   const isCodeUpdate = updatedCode !== currentCode;
   const explanation = isCodeUpdate
-    ? `Extracted details from your resume (${updates.join(', ')}). Connect your Gemini API Key to automatically extract and rewrite your full work experience, education, and project bullet points!`
+    ? `Extracted candidate details from your resume:\n• Name: ${profile.name || 'Not detected'}\n• Address / Location: ${profile.address || 'None specified'}\n• Phone: ${profile.phone || 'None specified'}\n• Email: ${profile.email || 'None specified'}\n• LinkedIn: ${profile.linkedin || 'None'}\n• GitHub: ${profile.github || 'None'}`
     : 'Extracted resume text. To automatically rewrite experience and projects into LaTeX, please configure your Gemini API Key in the top right.';
 
-  return { isCodeUpdate, newCode: updatedCode, explanation };
+  return { isCodeUpdate, newCode: updatedCode, explanation, profile };
 }
 

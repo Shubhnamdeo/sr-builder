@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../../services/api.js';
 import { SOFTWARE_ENGINEER_TEMPLATE } from '../../utils/latexTemplates.js';
-import { extractTextFromFile, parseResumeLocally } from '../../utils/pdfTextExtractor.js';
+import { extractTextFromFile, parseResumeLocally, extractQuickProfileFromText } from '../../utils/pdfTextExtractor.js';
 import './AiResumeModal.css';
 
 // Extract the updated section/code for a clean preview without red and green markings
@@ -170,7 +170,11 @@ ${baseCodeToUse}
 Strict Guidelines:
 1. Extract authentic candidate information from the uploaded resume:
    - Full Name
-   - Contact Info (Email, Phone, Location, LinkedIn, GitHub, Portfolio)
+   - Address / Location:
+     * Search carefully for Address, City, State, Country, or Postal Location.
+     * In the LaTeX header, REPLACE the placeholder location (e.g. "San Francisco, CA") with the candidate's real location.
+     * If NO address or location is found in the resume, REMOVE "San Francisco, CA $|$" completely from the LaTeX header. Never retain fake or placeholder addresses.
+   - Contact Info (Email, Phone, LinkedIn, GitHub, Portfolio)
    - Professional Summary (synthesize or use their summary, keeping it high-impact and 2-3 lines)
    - Work Experience (Job titles, company names, dates, locations, and bullet points)
    - Education (Degree, major, university, dates, GPA if mentioned)
@@ -179,11 +183,17 @@ Strict Guidelines:
 2. Map their details directly into the existing template macros:
    - \\resumeSubheading, \\resumeProjectHeading, \\resumeItem, \\resumeSubHeadingListStart, \\resumeSubHeadingListEnd
    - Preserve all macro definitions and LaTeX preamble. Never delete or break \\documentclass, \\usepackage, or macro definitions.
-3. Replace all dummy/placeholder data (e.g. placeholder names, sample colleges, fake jobs) with the user's authentic career details.
+3. Replace all dummy/placeholder data (e.g. placeholder names, dummy address 'San Francisco, CA', sample colleges, fake jobs) with the user's authentic career details.
 4. Escape LaTeX special characters properly (e.g. & to \\&, % to \\%, $ to \\$, _ to \\_, # to \\#).
 5. Support clean multi-page or 1-page formatting based on content volume.
 6. Format your output:
-   - Start with a brief, friendly 2-line summary describing what was extracted (e.g. "Extracted candidate details, 2 positions, education, and technical skills.").
+   - Start with a structured summary listing:
+     • Name: [Extracted Name]
+     • Address / Location: [Extracted Location or "None specified in resume"]
+     • Phone: [Extracted Phone or "None specified"]
+     • Email: [Extracted Email or "None specified"]
+     • Links: [LinkedIn, GitHub, Portfolio]
+     • Experience & Education: [Summary of jobs and degrees extracted]
    - End with the COMPLETE, compilable LaTeX code inside a single \`\`\`latex ... \`\`\` block.`;
 
   const payload = {
@@ -671,6 +681,7 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
     try {
       // 1. Client-side extraction via pdfjs-dist / FileReader
       const resumeText = await extractTextFromFile(file);
+      const profile = extractQuickProfileFromText(resumeText);
 
       setActiveTasks(prev => [
         { ...prev[0], status: 'completed', title: `Extracted text from ${file.name}` },
@@ -720,6 +731,19 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
         isCodeUpdate = localRes.isCodeUpdate;
       }
 
+      // 5. Ensure template address placeholder 'San Francisco, CA' is replaced with authentic user address or removed
+      if (profile?.address) {
+        if (modifiedCode.includes('San Francisco, CA')) {
+          modifiedCode = modifiedCode.replace('San Francisco, CA', profile.address);
+          isCodeUpdate = true;
+        }
+      } else {
+        if (modifiedCode.includes('San Francisco, CA')) {
+          modifiedCode = modifiedCode.replace(/San Francisco, CA\s*\$\|\$\s*/i, '');
+          isCodeUpdate = true;
+        }
+      }
+
       setActiveTasks(prev => [
         prev[0],
         { ...prev[1], status: 'completed', title: 'Career history and skills mapped to template' },
@@ -728,12 +752,22 @@ function AiResumeModal({ isOpen, onClose, currentCode = '', onApplyCode }) {
 
       const snippet = isCodeUpdate ? getChangedSnippet(currentCode, modifiedCode) : '';
 
+      const parsedDetailsBanner = [
+        `📄 **Resume Details Extracted:**`,
+        `• **Name:** ${profile?.name || 'Detected in resume'}`,
+        `• **Address / Location:** ${profile?.address ? profile.address : '*(None specified in resume — template placeholder removed)*'}`,
+        `• **Phone:** ${profile?.phone || 'None specified'}`,
+        `• **Email:** ${profile?.email || 'None specified'}`,
+        profile?.linkedin ? `• **LinkedIn:** ${profile.linkedin}` : null,
+        profile?.github ? `• **GitHub:** ${profile.github}` : null,
+      ].filter(Boolean).join('\n');
+
       setChatHistory(prev => [
         ...prev,
         {
           id: 'ai-up-' + Date.now(),
           sender: 'ai',
-          text: aiExplanation + "\n\nReview the code preview below and click 'Accept & Apply Code' to update main.tex. Once applied, we can continue refining sections, tailoring for roles, or adjusting spacing right here!",
+          text: `${parsedDetailsBanner}\n\n${aiExplanation}\n\nReview the code preview below and click 'Accept & Apply Code' to update main.tex. Once applied, we can continue refining sections, tailoring for roles, or adjusting spacing right here!`,
           hasDiff: isCodeUpdate,
           snippet: snippet,
           proposedCode: isCodeUpdate ? modifiedCode : null,
